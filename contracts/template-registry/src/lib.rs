@@ -201,7 +201,7 @@ impl TemplateRegistryContract {
         for i in 0..len {
             let alloc = allocations.get(i).unwrap();
 
-            if alloc.label.len() > MAX_LABEL_LENGTH {
+            if alloc.label.len() == 0 || alloc.label.len() > MAX_LABEL_LENGTH {
                 return Err(ContractError::LabelTooLong);
             }
 

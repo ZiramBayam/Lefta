@@ -189,6 +189,11 @@ impl SplitRouterContract {
         for i in 0..splits.len() {
             let split = splits.get(i).unwrap();
             if split.amount > 0 {
+                // Reject if recipient is contract address
+                if split.recipient == env.current_contract_address() {
+                    // Skip self-transfer to prevent fund loss
+                    continue;
+                }
                 token_client.transfer(&env.current_contract_address(), &split.recipient, &split.amount);
             }
         }
