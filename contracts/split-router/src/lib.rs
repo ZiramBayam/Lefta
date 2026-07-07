@@ -61,6 +61,7 @@ pub enum ContractError {
     Unauthorized = 4,
     BelowMinimumAmount = 5,
     AlreadyInitialized = 6,
+    InvalidBasisPoints = 7,
 }
 
 #[contract]
@@ -80,7 +81,7 @@ impl SplitRouterContract {
             total += allocations.get(i).unwrap().basis_points;
         }
         if total != 10000 {
-            return Err(ContractError::Unauthorized);
+            return Err(ContractError::InvalidBasisPoints);
         }
 
         let mut data = Bytes::new(&env);
@@ -160,8 +161,9 @@ impl SplitRouterContract {
         env.storage().instance().extend_ttl(100, 518400);
 
         let token_client = soroban_sdk::token::Client::new(&env, &usdc_token_id);
-        // Pull USDC from sender to contract: transfer_from(spender, from, to, amount)
-        token_client.transfer_from(&sender, &sender, &env.current_contract_address(), &amount);
+        // Transfer USDC from sender to contract
+        // Sender must include this in same transaction with auth
+        token_client.transfer(&sender, &env.current_contract_address(), &amount);
 
         for i in 0..splits.len() {
             let split = splits.get(i).unwrap();
@@ -192,6 +194,31 @@ impl SplitRouterContract {
             .instance()
             .get(&DataKey::RecipientHistory(recipient))
             .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    pub fn deactivate_template(
+        env: Env,
+        sender: Address,
+        template_id: BytesN<32>,
+    ) -> Result<(), ContractError> {
+        sender.require_auth();
+
+        let mut template: StoredTemplate = env
+            .storage()
+            .instance()
+            .get(&DataKey::Template(template_id.clone()))
+            .ok_or(ContractError::TemplateNotFound)?;
+
+        if template.sender != sender {
+            return Err(ContractError::Unauthorized);
+        }
+
+        template.is_active = false;
+
+        env.storage().instance().set(&DataKey::Template(template_id), &template);
+        env.storage().instance().extend_ttl(100, 518400);
+
+        Ok(())
     }
 
     fn calculate_splits(env: &Env, allocations: &Vec<Allocation>, total: i128) -> Vec<SplitResult> {
