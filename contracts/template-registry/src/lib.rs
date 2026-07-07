@@ -399,4 +399,49 @@ mod test {
         let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_validate_duplicate_recipient_not_next() {
+        // Duplicate not adjacent - should still catch
+        let env = Env::default();
+        let recipient = Address::generate(&env);
+        let other = Address::generate(&env);
+        let allocs: Vec<Allocation> = vec![
+            &env,
+            Allocation {
+                label: String::from_str(&env, "A"),
+                recipient: other.clone(),
+                basis_points: 3000,
+            },
+            Allocation {
+                label: String::from_str(&env, "B"),
+                recipient: recipient.clone(),
+                basis_points: 4000,
+            },
+            Allocation {
+                label: String::from_str(&env, "C"),
+                recipient,
+                basis_points: 3000,
+            },
+        ];
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
+        assert_eq!(result, Err(ContractError::DuplicateRecipient));
+    }
+
+    #[test]
+    fn test_validate_all_unique_recipients() {
+        // Different recipients should pass
+        let env = Env::default();
+        let r1 = Address::generate(&env);
+        let r2 = Address::generate(&env);
+        let r3 = Address::generate(&env);
+        let allocs: Vec<Allocation> = vec![
+            &env,
+            Allocation { label: String::from_str(&env, "A"), recipient: r1, basis_points: 3333 },
+            Allocation { label: String::from_str(&env, "B"), recipient: r2, basis_points: 3333 },
+            Allocation { label: String::from_str(&env, "C"), recipient: r3, basis_points: 3334 },
+        ];
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
+        assert!(result.is_ok());
+    }
 }
