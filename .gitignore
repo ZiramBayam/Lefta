@@ -1,0 +1,32 @@
+# Rust/WebAssembly
+target/
+*.wasm
+*.rlib
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env
+.env
+.env.local
+
+# Docs dan spec files
+*.md
+docs/
+
+# Agent specs
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+.next/
