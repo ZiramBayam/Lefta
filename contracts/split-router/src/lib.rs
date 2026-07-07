@@ -6,6 +6,8 @@ use soroban_sdk::{
 };
 
 const MINIMUM_AMOUNT: i128 = 1_000_000;
+const MAX_HISTORY_PER_PAGE: u32 = 100;
+const MAX_HISTORY_TOTAL: u32 = 1000; // Max entries per sender/recipient
 
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -147,13 +149,32 @@ impl SplitRouterContract {
 
         env.storage().instance().set(&DataKey::Transfer(transfer_id.clone()), &record);
 
-        let mut sender_history = Self::get_sender_history(env.clone(), sender.clone());
+        // Update sender history with bounded growth
+        let mut sender_history = env
+            .storage()
+            .instance()
+            .get::<_, Vec<BytesN<32>>>(&DataKey::SenderHistory(sender.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        // Remove oldest if at max
+        if sender_history.len() >= MAX_HISTORY_TOTAL {
+            sender_history.remove(0);
+        }
         sender_history.push_back(transfer_id.clone());
         env.storage().instance().set(&DataKey::SenderHistory(sender.clone()), &sender_history);
 
+        // Update recipient history with bounded growth
         for i in 0..splits.len() {
             let split = splits.get(i).unwrap();
-            let mut recipient_history = Self::get_recipient_history(env.clone(), split.recipient.clone());
+            let mut recipient_history = env
+                .storage()
+                .instance()
+                .get::<_, Vec<BytesN<32>>>(&DataKey::RecipientHistory(split.recipient.clone()))
+                .unwrap_or_else(|| Vec::new(&env));
+
+            if recipient_history.len() >= MAX_HISTORY_TOTAL {
+                recipient_history.remove(0);
+            }
             recipient_history.push_back(transfer_id.clone());
             env.storage().instance().set(&DataKey::RecipientHistory(split.recipient.clone()), &recipient_history);
         }
@@ -182,18 +203,98 @@ impl SplitRouterContract {
             .ok_or(ContractError::TransferNotFound)
     }
 
-    pub fn get_sender_history(env: Env, sender: Address) -> Vec<BytesN<32>> {
-        env.storage()
+    /// Get sender history with pagination
+    /// page: 0-indexed page number
+    /// limit: entries per page (max 100)
+    pub fn get_sender_history_page(env: Env, sender: Address, page: u32, limit: u32) -> Vec<BytesN<32>> {
+        let history = env
+            .storage()
             .instance()
-            .get(&DataKey::SenderHistory(sender))
-            .unwrap_or_else(|| Vec::new(&env))
+            .get::<_, Vec<BytesN<32>>>(&DataKey::SenderHistory(sender.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let limit = if limit > MAX_HISTORY_PER_PAGE {
+            MAX_HISTORY_PER_PAGE
+        } else {
+            limit
+        };
+
+        let start = page * limit;
+        let end = if start + limit > history.len() {
+            history.len()
+        } else {
+            start + limit
+        };
+
+        if start >= history.len() {
+            return Vec::new(&env);
+        }
+
+        let mut result = Vec::new(&env);
+        for i in start..end {
+            result.push_back(history.get(i).unwrap());
+        }
+        result
     }
 
+    /// Get sender history count
+    /// Get sender history (alias for page 0, max limit)
+    pub fn get_sender_history(env: Env, sender: Address) -> Vec<BytesN<32>> {
+        Self::get_sender_history_page(env, sender, 0, MAX_HISTORY_PER_PAGE)
+    }
+
+    /// Get recipient history (alias for page 0, max limit)
     pub fn get_recipient_history(env: Env, recipient: Address) -> Vec<BytesN<32>> {
+        Self::get_recipient_history_page(env, recipient, 0, MAX_HISTORY_PER_PAGE)
+    }
+
+    pub fn get_sender_history_count(env: Env, sender: Address) -> u32 {
         env.storage()
             .instance()
-            .get(&DataKey::RecipientHistory(recipient))
-            .unwrap_or_else(|| Vec::new(&env))
+            .get::<_, Vec<BytesN<32>>>(&DataKey::SenderHistory(sender))
+            .map(|h| h.len())
+            .unwrap_or(0)
+    }
+
+    /// Get recipient history with pagination
+    pub fn get_recipient_history_page(env: Env, recipient: Address, page: u32, limit: u32) -> Vec<BytesN<32>> {
+        let history = env
+            .storage()
+            .instance()
+            .get::<_, Vec<BytesN<32>>>(&DataKey::RecipientHistory(recipient.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let limit = if limit > MAX_HISTORY_PER_PAGE {
+            MAX_HISTORY_PER_PAGE
+        } else {
+            limit
+        };
+
+        let start = page * limit;
+        let end = if start + limit > history.len() {
+            history.len()
+        } else {
+            start + limit
+        };
+
+        if start >= history.len() {
+            return Vec::new(&env);
+        }
+
+        let mut result = Vec::new(&env);
+        for i in start..end {
+            result.push_back(history.get(i).unwrap());
+        }
+        result
+    }
+
+    /// Get recipient history count
+    pub fn get_recipient_history_count(env: Env, recipient: Address) -> u32 {
+        env.storage()
+            .instance()
+            .get::<_, Vec<BytesN<32>>>(&DataKey::RecipientHistory(recipient))
+            .map(|h| h.len())
+            .unwrap_or(0)
     }
 
     pub fn deactivate_template(
@@ -491,5 +592,14 @@ mod test {
 
         assert_eq!(splits.get(0).unwrap().amount, 0);
         assert_eq!(splits.get(1).unwrap().amount, 0);
+    }
+
+    #[test]
+    fn test_constants_bounds() {
+        // Verify bounds constants
+        assert_eq!(MINIMUM_AMOUNT, 1_000_000);
+        assert!(MAX_HISTORY_PER_PAGE <= 100);
+        assert!(MAX_HISTORY_TOTAL <= 1000);
+        assert!(MAX_HISTORY_PER_PAGE <= MAX_HISTORY_TOTAL);
     }
 }
