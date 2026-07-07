@@ -6,7 +6,7 @@ use soroban_sdk::{
 };
 
 const MAX_LABEL_LENGTH: u32 = 20;
-const MAX_ALLOCATIONS: usize = 5;
+const MAX_ALLOCATIONS: u32 = 5;
 const TOTAL_BASIS_POINTS: u32 = 10000;
 
 #[contracttype]
@@ -61,15 +61,13 @@ impl TemplateRegistryContract {
     ) -> Result<BytesN<32>, ContractError> {
         sender.require_auth();
 
-        // Validate allocations
-        Self::validate_allocations(&allocations)?;
+        Self::validate_allocations(&env, &allocations)?;
 
-        // Generate template ID: hash of (sender, ledger_seq, timestamp)
+        // Generate template ID from ledger sequence
         let mut data = Bytes::new(&env);
-        data.append(&sender.to_bytes());
-        data.append(&Bytes::from_u32(&env, env.ledger().sequence()));
-        data.append(&Bytes::from_u64(&env, env.ledger().timestamp()));
-        let template_id = env.crypto().sha256(&data).into();
+        data.append(&Bytes::from_array(&env, &env.ledger().sequence().to_le_bytes()));
+        data.append(&Bytes::from_array(&env, &env.ledger().timestamp().to_le_bytes()));
+        let template_id: BytesN<32> = env.crypto().sha256(&data).into();
 
         let now = env.ledger().timestamp();
 
@@ -82,17 +80,14 @@ impl TemplateRegistryContract {
             updated_at: now,
         };
 
-        // Store template
         env.storage().instance().set(&DataKey::Template(template_id.clone()), &template);
 
-        // Update sender's template list
         let mut sender_templates = Self::get_sender_templates(env.clone(), sender.clone());
         sender_templates.push_back(template_id.clone());
         env.storage()
             .instance()
             .set(&DataKey::SenderTemplates(sender), &sender_templates);
 
-        // Extend TTL
         env.storage().instance().extend_ttl(100, 518400);
 
         Ok(template_id)
@@ -120,8 +115,7 @@ impl TemplateRegistryContract {
             return Err(ContractError::TemplateInactive);
         }
 
-        // Validate new allocations
-        Self::validate_allocations(&allocations)?;
+        Self::validate_allocations(&env, &allocations)?;
 
         let updated_template = SplitTemplate {
             id: template_id.clone(),
@@ -191,7 +185,7 @@ impl TemplateRegistryContract {
         }
     }
 
-    fn validate_allocations(allocations: &Vec<Allocation>) -> Result<(), ContractError> {
+    fn validate_allocations(env: &Env, allocations: &Vec<Allocation>) -> Result<(), ContractError> {
         let len = allocations.len();
 
         if len == 0 {
@@ -202,26 +196,20 @@ impl TemplateRegistryContract {
             return Err(ContractError::TooManyAllocations);
         }
 
-        // Check total basis points = 10000
         let mut total: u32 = 0;
-        let mut seen_recipients: Vec<Address> = Vec::new(&env);
+        let mut seen_recipients: Vec<Address> = Vec::new(env);
 
         for i in 0..len {
             let alloc = allocations.get(i).unwrap();
 
-            // Check label length
             if alloc.label.len() > MAX_LABEL_LENGTH {
                 return Err(ContractError::LabelTooLong);
             }
 
             total += alloc.basis_points;
 
-            // Check duplicate recipients
-            let mut recipient_clone = alloc.recipient.clone();
-            let recipient_bytes = recipient_clone.to_bytes();
-            for seen in seen_recipients.iter() {
-                let mut seen_clone = seen.clone();
-                if seen_clone.to_bytes() == recipient_bytes {
+            for j in 0..seen_recipients.len() {
+                if seen_recipients.get(j).unwrap() == alloc.recipient {
                     return Err(ContractError::DuplicateRecipient);
                 }
             }
@@ -294,7 +282,7 @@ mod test {
         let allocations: Vec<Allocation> = vec![
             &env,
             create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 3999), // Total = 9999
+            create_allocation(&env, "Tabungan", &recipient2, 3999),
         ];
 
         let contract_id = env.register(TemplateRegistryContract, ());
@@ -315,7 +303,7 @@ mod test {
         let allocations: Vec<Allocation> = vec![
             &env,
             create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4001), // Total = 10001
+            create_allocation(&env, "Tabungan", &recipient2, 4001),
         ];
 
         let contract_id = env.register(TemplateRegistryContract, ());
@@ -331,7 +319,6 @@ mod test {
     fn test_create_template_too_many_allocations() {
         let (env, sender) = setup_test_env();
 
-        // Create 6 allocations (more than MAX of 5)
         let mut allocations_vec: Vec<Allocation> = Vec::new(&env);
         for i in 0..6 {
             let recipient = Address::generate(&env);
@@ -355,7 +342,7 @@ mod test {
         let allocations: Vec<Allocation> = vec![
             &env,
             create_allocation(&env, "Harian", &recipient, 5000),
-            create_allocation(&env, "Tabungan", &recipient, 5000), // Same recipient
+            create_allocation(&env, "Tabungan", &recipient, 5000),
         ];
 
         let contract_id = env.register(TemplateRegistryContract, ());
@@ -375,7 +362,7 @@ mod test {
 
         let allocations: Vec<Allocation> = vec![
             &env,
-            create_allocation(&env, "IniLabelYangSangatPanjangSekali", &recipient1, 6000), // > 20 chars
+            create_allocation(&env, "IniLabelYangSangatPanjangSekali", &recipient1, 6000),
             create_allocation(&env, "Tabungan", &recipient2, 4000),
         ];
 
@@ -441,7 +428,6 @@ mod test {
 
         let template_id = client.create_template(&sender, &allocations).unwrap();
 
-        // Try to update with different sender
         let new_allocations: Vec<Allocation> = vec![
             &env,
             create_allocation(&env, "Harian", &recipient1, 5000),
@@ -522,7 +508,6 @@ mod test {
 
         let template_id = client.create_template(&sender, &allocations).unwrap();
 
-        // Try to deactivate with different sender
         let result = client.deactivate_template(&other, &template_id);
         assert_eq!(result, Err(ContractError::Unauthorized));
     }
@@ -627,7 +612,6 @@ mod test {
         let recipient1 = Address::generate(&env);
         let recipient2 = Address::generate(&env);
 
-        // Exactly 20 chars - should pass
         let allocations: Vec<Allocation> = vec![
             &env,
             create_allocation(&env, "12345678901234567890", &recipient1, 6000),
@@ -649,7 +633,6 @@ mod test {
         let recipient1 = Address::generate(&env);
         let recipient2 = Address::generate(&env);
 
-        // 1 char - should pass
         let allocations: Vec<Allocation> = vec![
             &env,
             create_allocation(&env, "A", &recipient1, 6000),
@@ -680,7 +663,7 @@ mod test {
         let new_allocations: Vec<Allocation> = vec![
             &env,
             create_allocation(&env, "C", &recipient1, 5000),
-            create_allocation(&env, "D", &recipient2, 4999), // Total = 9999
+            create_allocation(&env, "D", &recipient2, 4999),
         ];
 
         let contract_id = env.register(TemplateRegistryContract, ());

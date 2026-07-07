@@ -3,7 +3,7 @@ members = ["template-registry", "split-router"]
 resolver = "2"
 
 [workspace.dependencies]
-soroban-sdk = { version = "27.0.0-rc.1", features = ["testutils"] }
+soroban-sdk = "22.0.0"
 
 [profile.release]
 opt-level = "z"
