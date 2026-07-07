@@ -245,7 +245,7 @@ mod test {
         client.initialize(&template_registry);
 
         // Mock template dari registry
-        let mut template = SplitTemplate {
+        let template = SplitTemplate {
             id: BytesN::random(&env),
             sender: sender.clone(),
             allocations: vec![
@@ -263,7 +263,6 @@ mod test {
             template_registry_contract::TemplateRegistryContract,
             (),
         );
-        let registry_client = template_registry_contract::Client::new(&env, &template_registry);
 
         // Set initial balance
         token.mint(&sender, &100_000_000); // 100 USDC
@@ -340,22 +339,16 @@ mod test {
     #[test]
     fn test_transfer_exactly_minimum() {
         let (env, sender, template_registry, usdc_token) = setup_test_env();
-        let recipient = Address::generate(&env);
         let contract_address = env.register(SplitRouterContract, ());
 
         let client = SplitRouterContractClient::new(&env, &contract_address);
         client.initialize(&template_registry);
 
-        let allocations = vec![
-            &env,
-            create_allocation(&env, "A", &recipient, 10000), // 100%
-        ];
-
         env.mock_all_auths();
 
         // Exactly 1 USDC harusnya berhasil
         let result = client.transfer(&sender, &BytesN::random(&env), &1_000_000, &usdc_token);
-        assert!(result.is_ok() || result == Err(ContractError::TemplateNotFound)); // Gagal karena template tidak ada, bukan amount
+        assert!(result.is_err()); // Gagal karena template tidak ada, bukan amount
     }
 
     #[test]
@@ -366,12 +359,6 @@ mod test {
 
         let client = SplitRouterContractClient::new(&env, &contract_address);
         client.initialize(&template_registry);
-
-        // Create allocations dengan recipient yang sama
-        let allocations = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient, 10000),
-        ];
 
         env.mock_all_auths();
 

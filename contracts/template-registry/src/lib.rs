@@ -204,7 +204,7 @@ impl TemplateRegistryContract {
 
         // Check total basis points = 10000
         let mut total: u32 = 0;
-        let mut seen_recipients: Vec<Address> = Vec::new(&allocations.get(0).unwrap().recipient.clone().get_env());
+        let mut seen_recipients: Vec<Address> = Vec::new(&env);
 
         for i in 0..len {
             let alloc = allocations.get(i).unwrap();
