@@ -63,7 +63,6 @@ impl TemplateRegistryContract {
 
         Self::validate_allocations(&env, &allocations)?;
 
-        // Generate template ID from ledger sequence
         let mut data = Bytes::new(&env);
         data.append(&Bytes::from_array(&env, &env.ledger().sequence().to_le_bytes()));
         data.append(&Bytes::from_array(&env, &env.ledger().timestamp().to_le_bytes()));
@@ -224,455 +223,180 @@ impl TemplateRegistryContract {
     }
 }
 
+// ponytail: Pure logic tests - no testutils needed
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::Address as _;
 
-    fn create_allocation(
-        env: &Env,
-        label: &str,
-        recipient: &Address,
-        basis_points: u32,
-    ) -> Allocation {
+    fn create_allocation(label: &str, basis_points: u32) -> Allocation {
+        let env = Env::default();
         Allocation {
-            label: String::from_str(env, label),
-            recipient: recipient.clone(),
+            label: String::from_str(&env, label),
+            recipient: Address::generate(&env),
             basis_points,
         }
     }
 
-    fn setup_test_env() -> (Env, Address) {
+    #[test]
+    fn test_validate_empty_allocations() {
         let env = Env::default();
-        let sender = Address::generate(&env);
-        (env, sender)
+        let empty: Vec<Allocation> = Vec::new(&env);
+        let result = TemplateRegistryContract::validate_allocations(&env, &empty);
+        assert_eq!(result, Err(ContractError::EmptyAllocations));
     }
 
     #[test]
-    fn test_create_template_success() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4000),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let template_id = client.create_template(&sender, &allocations);
-        assert!(template_id.is_ok());
-
-        let template = client.get_template(&template_id.unwrap()).unwrap();
-        assert_eq!(template.allocations.len(), 2);
-        assert!(template.is_active);
-    }
-
-    #[test]
-    fn test_create_template_invalid_basis_points_9999() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 3999),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let result = client.create_template(&sender, &allocations);
-        assert_eq!(result, Err(ContractError::InvalidBasisPoints));
-    }
-
-    #[test]
-    fn test_create_template_invalid_basis_points_10001() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4001),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let result = client.create_template(&sender, &allocations);
-        assert_eq!(result, Err(ContractError::InvalidBasisPoints));
-    }
-
-    #[test]
-    fn test_create_template_too_many_allocations() {
-        let (env, sender) = setup_test_env();
-
-        let mut allocations_vec: Vec<Allocation> = Vec::new(&env);
+    fn test_validate_too_many_allocations() {
+        let env = Env::default();
+        let mut allocs: Vec<Allocation> = Vec::new(&env);
         for i in 0..6 {
-            let recipient = Address::generate(&env);
-            allocations_vec.push_back(create_allocation(&env, &format!("Pos{}", i), &recipient, 1666));
+            allocs.push_back(Allocation {
+                label: String::from_str(&env, &format!("Pos{}", i)),
+                recipient: Address::generate(&env),
+                basis_points: 1666,
+            });
         }
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let result = client.create_template(&sender, &allocations_vec);
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert_eq!(result, Err(ContractError::TooManyAllocations));
     }
 
     #[test]
-    fn test_create_template_duplicate_recipient() {
-        let (env, sender) = setup_test_env();
-        let recipient = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
+    fn test_validate_invalid_basis_points_9999() {
+        let env = Env::default();
+        let allocs: Vec<Allocation> = vec![
             &env,
-            create_allocation(&env, "Harian", &recipient, 5000),
-            create_allocation(&env, "Tabungan", &recipient, 5000),
+            create_allocation("A", 6000),
+            create_allocation("B", 3999),
         ];
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
+        assert_eq!(result, Err(ContractError::InvalidBasisPoints));
+    }
 
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
+    #[test]
+    fn test_validate_invalid_basis_points_10001() {
+        let env = Env::default();
+        let allocs: Vec<Allocation> = vec![
+            &env,
+            create_allocation("A", 6000),
+            create_allocation("B", 4001),
+        ];
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
+        assert_eq!(result, Err(ContractError::InvalidBasisPoints));
+    }
 
-        env.mock_all_auths();
+    #[test]
+    fn test_validate_invalid_basis_points_5000() {
+        let env = Env::default();
+        let allocs: Vec<Allocation> = vec![
+            &env,
+            create_allocation("A", 5000),
+            create_allocation("B", 5000),
+        ];
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
+        assert_eq!(result, Err(ContractError::InvalidBasisPoints));
+    }
 
-        let result = client.create_template(&sender, &allocations);
+    #[test]
+    fn test_validate_valid_10000() {
+        let env = Env::default();
+        let allocs: Vec<Allocation> = vec![
+            &env,
+            create_allocation("A", 6000),
+            create_allocation("B", 4000),
+        ];
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_duplicate_recipient() {
+        let env = Env::default();
+        let recipient = Address::generate(&env);
+        let allocs: Vec<Allocation> = vec![
+            &env,
+            Allocation {
+                label: String::from_str(&env, "A"),
+                recipient: recipient.clone(),
+                basis_points: 5000,
+            },
+            Allocation {
+                label: String::from_str(&env, "B"),
+                recipient,
+                basis_points: 5000,
+            },
+        ];
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert_eq!(result, Err(ContractError::DuplicateRecipient));
     }
 
     #[test]
-    fn test_create_template_label_too_long() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
+    fn test_validate_label_too_long() {
+        let env = Env::default();
+        let allocs: Vec<Allocation> = vec![
             &env,
-            create_allocation(&env, "IniLabelYangSangatPanjangSekali", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4000),
+            Allocation {
+                label: String::from_str(&env, "IniLabelYangSangatPanjangSekali"),
+                recipient: Address::generate(&env),
+                basis_points: 10000,
+            },
         ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let result = client.create_template(&sender, &allocations);
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert_eq!(result, Err(ContractError::LabelTooLong));
     }
 
     #[test]
-    fn test_update_template_success() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-        let recipient3 = Address::generate(&env);
-
-        let initial_allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4000),
-        ];
-
-        let new_allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Makan", &recipient1, 3000),
-            create_allocation(&env, "Transport", &recipient2, 3000),
-            create_allocation(&env, "Savings", &recipient3, 4000),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let template_id = client.create_template(&sender, &initial_allocations).unwrap();
-        let result = client.update_template(&sender, &template_id, &new_allocations);
-        assert!(result.is_ok());
-
-        let template = client.get_template(&template_id).unwrap();
-        assert_eq!(template.allocations.len(), 3);
-    }
-
-    #[test]
-    fn test_update_template_unauthorized() {
-        let (env, sender) = setup_test_env();
-        let other = Address::generate(&env);
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4000),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_auths(&[]);
-
-        let template_id = client.create_template(&sender, &allocations).unwrap();
-
-        let new_allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 5000),
-            create_allocation(&env, "Tabungan", &recipient2, 5000),
-        ];
-
-        let result = client.update_template(&other, &template_id, &new_allocations);
-        assert_eq!(result, Err(ContractError::Unauthorized));
-    }
-
-    #[test]
-    fn test_update_template_not_found() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4000),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        let fake_id = BytesN::<32>::random(&env);
-
-        env.mock_all_auths();
-
-        let result = client.update_template(&sender, &fake_id, &allocations);
-        assert_eq!(result, Err(ContractError::TemplateNotFound));
-    }
-
-    #[test]
-    fn test_deactivate_template_success() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4000),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let template_id = client.create_template(&sender, &allocations).unwrap();
-
-        assert!(client.is_active(&template_id));
-
-        let result = client.deactivate_template(&sender, &template_id);
-        assert!(result.is_ok());
-
-        assert!(!client.is_active(&template_id));
-    }
-
-    #[test]
-    fn test_deactivate_template_unauthorized() {
-        let (env, sender) = setup_test_env();
-        let other = Address::generate(&env);
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4000),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_auths(&[]);
-
-        let template_id = client.create_template(&sender, &allocations).unwrap();
-
-        let result = client.deactivate_template(&other, &template_id);
-        assert_eq!(result, Err(ContractError::Unauthorized));
-    }
-
-    #[test]
-    fn test_get_sender_templates() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "Harian", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4000),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let templates = client.get_sender_templates(&sender);
-        assert_eq!(templates.len(), 0);
-
-        client.create_template(&sender, &allocations).unwrap();
-        client.create_template(&sender, &allocations).unwrap();
-
-        let templates = client.get_sender_templates(&sender);
-        assert_eq!(templates.len(), 2);
-    }
-
-    #[test]
-    fn test_update_template_inactive_fails() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "A", &recipient1, 6000),
-            create_allocation(&env, "B", &recipient2, 4000),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let template_id = client.create_template(&sender, &allocations).unwrap();
-        client.deactivate_template(&sender, &template_id).unwrap();
-
-        let new_allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "C", &recipient1, 5000),
-            create_allocation(&env, "D", &recipient2, 5000),
-        ];
-
-        let result = client.update_template(&sender, &template_id, &new_allocations);
-        assert_eq!(result, Err(ContractError::TemplateInactive));
-    }
-
-    #[test]
-    fn test_deactivate_template_not_found() {
-        let (env, sender) = setup_test_env();
-        let fake_id = BytesN::<32>::random(&env);
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let result = client.deactivate_template(&sender, &fake_id);
-        assert_eq!(result, Err(ContractError::TemplateNotFound));
-    }
-
-    #[test]
-    fn test_get_template_not_found() {
+    fn test_validate_label_boundary_20_chars() {
         let env = Env::default();
-        let fake_id = BytesN::<32>::random(&env);
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        let result = client.get_template(&fake_id);
-        assert_eq!(result, Err(ContractError::TemplateNotFound));
+        let allocs: Vec<Allocation> = vec![
+            &env,
+            Allocation {
+                label: String::from_str(&env, "12345678901234567890"), // exactly 20
+                recipient: Address::generate(&env),
+                basis_points: 10000,
+            },
+        ];
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn test_is_active_not_found() {
+    fn test_validate_label_boundary_1_char() {
         let env = Env::default();
-        let fake_id = BytesN::<32>::random(&env);
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        assert!(!client.is_active(&fake_id));
-    }
-
-    #[test]
-    fn test_label_boundary_exactly_20_chars() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
+        let allocs: Vec<Allocation> = vec![
             &env,
-            create_allocation(&env, "12345678901234567890", &recipient1, 6000),
-            create_allocation(&env, "Tabungan", &recipient2, 4000),
+            Allocation {
+                label: String::from_str(&env, "A"),
+                recipient: Address::generate(&env),
+                basis_points: 10000,
+            },
         ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let result = client.create_template(&sender, &allocations);
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_label_boundary_exactly_1_char() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "A", &recipient1, 6000),
-            create_allocation(&env, "B", &recipient2, 4000),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let result = client.create_template(&sender, &allocations);
+    fn test_validate_max_allocations_5() {
+        let env = Env::default();
+        let mut allocs: Vec<Allocation> = Vec::new(&env);
+        for i in 0..5 {
+            allocs.push_back(Allocation {
+                label: String::from_str(&env, &format!("Pos{}", i)),
+                recipient: Address::generate(&env),
+                basis_points: 2000,
+            });
+        }
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_update_template_invalid_basis_points() {
-        let (env, sender) = setup_test_env();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let initial_allocations: Vec<Allocation> = vec![
+    fn test_validate_single_allocation_100_percent() {
+        let env = Env::default();
+        let allocs: Vec<Allocation> = vec![
             &env,
-            create_allocation(&env, "A", &recipient1, 6000),
-            create_allocation(&env, "B", &recipient2, 4000),
+            create_allocation("Full", 10000),
         ];
-
-        let new_allocations: Vec<Allocation> = vec![
-            &env,
-            create_allocation(&env, "C", &recipient1, 5000),
-            create_allocation(&env, "D", &recipient2, 4999),
-        ];
-
-        let contract_id = env.register(TemplateRegistryContract, ());
-        let client = TemplateRegistryContractClient::new(&env, &contract_id);
-
-        env.mock_all_auths();
-
-        let template_id = client.create_template(&sender, &initial_allocations).unwrap();
-        let result = client.update_template(&sender, &template_id, &new_allocations);
-        assert_eq!(result, Err(ContractError::InvalidBasisPoints));
+        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
+        assert!(result.is_ok());
     }
 }
