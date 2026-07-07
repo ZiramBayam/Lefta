@@ -379,11 +379,6 @@ mod test {
         let client = SplitRouterContractClient::new(&env, &contract_address);
         client.initialize(&template_registry);
 
-        let allocations = vec![
-            &env,
-            create_allocation(&env, "A", &recipient, 10000),
-        ];
-
         env.mock_all_auths();
 
         let _ = client.transfer(&sender, &BytesN::random(&env), &1_000_000, &usdc_token);
@@ -391,5 +386,113 @@ mod test {
 
         let history = client.get_sender_history(&sender);
         assert_eq!(history.len(), 2);
+    }
+
+    #[test]
+    fn test_transfer_without_initialize() {
+        let (env, sender, _, usdc_token) = setup_test_env();
+        let contract_address = env.register(SplitRouterContract, ());
+
+        let client = SplitRouterContractClient::new(&env, &contract_address);
+
+        env.mock_all_auths();
+
+        let result = client.transfer(&sender, &BytesN::random(&env), &100_000_000, &usdc_token);
+        assert_eq!(result, Err(ContractError::TemplateNotFound));
+    }
+
+    #[test]
+    fn test_initialize_twice_fails() {
+        let (env, _, template_registry) = setup_test_env();
+        let contract_address = env.register(SplitRouterContract, ());
+
+        let client = SplitRouterContractClient::new(&env, &contract_address);
+        let first = client.initialize(&template_registry);
+        assert!(first.is_ok());
+
+        let second = client.initialize(&template_registry);
+        assert_eq!(second, Err(ContractError::AlreadyInitialized));
+    }
+
+    #[test]
+    fn test_get_transfer_not_found() {
+        let (env, _, _, _) = setup_test_env();
+        let fake_id = BytesN::<32>::random(&env);
+
+        let contract_id = env.register(SplitRouterContract, ());
+        let client = SplitRouterContractClient::new(&env, &contract_id);
+
+        let result = client.get_transfer(&fake_id);
+        assert_eq!(result, Err(ContractError::TransferNotFound));
+    }
+
+    #[test]
+    fn test_get_recipient_history_empty() {
+        let (env, _, _, _) = setup_test_env();
+        let recipient = Address::generate(&env);
+
+        let contract_id = env.register(SplitRouterContract, ());
+        let client = SplitRouterContractClient::new(&env, &contract_id);
+
+        let history = client.get_recipient_history(&recipient);
+        assert_eq!(history.len(), 0);
+    }
+
+    #[test]
+    fn test_get_sender_history_empty() {
+        let (env, sender, _, _) = setup_test_env();
+
+        let contract_id = env.register(SplitRouterContract, ());
+        let client = SplitRouterContractClient::new(&env, &contract_id);
+
+        let history = client.get_sender_history(&sender);
+        assert_eq!(history.len(), 0);
+    }
+
+    #[test]
+    fn test_transfer_single_100_percent_allocation() {
+        // Test calculate_splits directly with 100% allocation
+        let env = Env::default();
+        let recipient = Address::generate(&env);
+
+        let allocations = vec![
+            &env,
+            create_allocation(&env, "Full", &recipient, 10000),
+        ];
+
+        let total: i128 = 50_000_000;
+        let splits = SplitRouterContract::calculate_splits(&allocations, total);
+
+        assert_eq!(splits.len(), 1);
+        assert_eq!(splits.get(0).unwrap().amount, total);
+    }
+
+    #[test]
+    fn test_calculate_splits_rounding_precision() {
+        // Test that all edge cases of split calculation preserve total
+        let env = Env::default();
+        let recipient1 = Address::generate(&env);
+        let recipient2 = Address::generate(&env);
+        let recipient3 = Address::generate(&env);
+        let recipient4 = Address::generate(&env);
+
+        let test_cases = vec![
+            // (allocations, total)
+            (vec![(&recipient1, 5000), (&recipient2, 5000)], 1_000_000_i128), // 50/50
+            (vec![(&recipient1, 3333), (&recipient2, 3333), (&recipient3, 3334)], 100_i128), // 33.33% rounding
+            (vec![(&recipient1, 100), (&recipient2, 100), (&recipient3, 100), (&recipient4, 9700)], 1_000_000_i128), // small + large
+        ];
+
+        for (allocs, total) in test_cases {
+            let allocation_vec: Vec<Allocation> = allocs
+                .iter()
+                .map(|(r, bp)| create_allocation(&env, "X", r, *bp))
+                .collect();
+
+            let splits = SplitRouterContract::calculate_splits(&allocation_vec, total);
+            let sum: i128 = splits.iter().fold(0, |acc, s| acc + s.amount);
+
+            assert_eq!(sum, total, "Splits must sum to total for total={}", total);
+        }
     }
 }
