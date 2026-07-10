@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f9faf5;
+  --surface: #f9faf5;
+  --surface-dim: #d9dad6;
+  --surface-bright: #f9faf5;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f3f4ef;
+  --surface-container: #edeee9;
+  --surface-container-high: #e7e9e4;
+  --surface-container-highest: #e2e3de;
+  --on-surface: #1a1c19;
+  --on-surface-variant: #474834;
+  --on-background: #1a1c19;
+  --outline: #777962;
+  --outline-variant: #c8c8ae;
+  --primary: #5b6400;
+  --on-primary: #ffffff;
+  --primary-container: #d1e231;
+  --on-primary-container: #5a6300;
+  --inverse-primary: #c0d11b;
+  --secondary: #5a5d70;
+  --on-secondary: #ffffff;
+  --secondary-container: #dee1f8;
+  --on-secondary-container: #606376;
+  --tertiary: #ae2f34;
+  --on-tertiary: #ffffff;
+  --tertiary-container: #ffcbc8;
+  --on-tertiary-container: #ac2e34;
+  --error: #ba1a1a;
+  --on-error: #ffffff;
+  --error-container: #ffdad6;
+  --on-error-container: #93000a;
+}
+
+body {
+  color: var(--on-surface);
+  background: var(--background);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
