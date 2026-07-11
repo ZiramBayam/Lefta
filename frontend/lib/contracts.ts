@@ -148,6 +148,11 @@ export const getRecipientHistory = async (recipient: string): Promise<TransferRe
   );
 };
 
+// Add a new transfer to local history (for demo purposes)
+export const addToHistory = (transfer: TransferRecord): void => {
+  MOCK_TRANSFER_RECORDS.unshift(transfer);
+};
+
 // Stellar Explorer URL builder
 export const getStellarExplorerUrl = (txHash: string): string => {
   return `https://stellar.expert/explorer/testnet/tx/${txHash}`;

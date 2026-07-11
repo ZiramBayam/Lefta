@@ -8,7 +8,7 @@ import { Button, IconSend, IconExpandMore } from "@/components/ui";
 import SplitPreview from "@/components/SplitPreview";
 import TransactionStatus from "@/components/TransactionStatus";
 import { SplitTemplate, TransactionStatus as TxStatus, ERROR_MESSAGES } from "@/types";
-import { getSenderTemplates, transfer } from "@/lib/contracts";
+import { getSenderTemplates, transfer, addToHistory } from "@/lib/contracts";
 import { usdcToStroops } from "@/types";
 
 export default function SendPage() {
@@ -64,6 +64,20 @@ export default function SendPage() {
 
       setTxHash(result.txHash);
       setTxStatus("success");
+
+      // Add to local history
+      addToHistory({
+        id: result.transferId,
+        sender: "current-user",
+        templateId: selectedTemplateId,
+        totalAmount: usdcToStroops(amountNum),
+        timestamp: Date.now(),
+        splits: selectedTemplate.allocations.map(a => ({
+          recipient: a.recipient,
+          label: a.label,
+          amount: (usdcToStroops(amountNum) * BigInt(a.basisPoints)) / BigInt(10000)
+        }))
+      });
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : ERROR_MESSAGES.NETWORK_ERROR
@@ -84,8 +98,8 @@ export default function SendPage() {
     setErrorMessage("");
   };
 
-  const handleBackToHome = () => {
-    router.push("/");
+  const handleBackToHistory = () => {
+    router.push("/send/history");
   };
 
   return (
@@ -102,7 +116,7 @@ export default function SendPage() {
             errorMessage={errorMessage}
             onRetry={handleRetry}
             onCancel={handleCancel}
-            onBackToHome={handleBackToHome}
+            onBackToHome={handleBackToHistory}
           />
         ) : (
           <>
