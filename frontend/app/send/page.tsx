@@ -92,7 +92,7 @@ export default function SendPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <TopAppBar title="Kirim USDC" showBackButton />
 
-      <main className="flex-1 px-container-padding py-stack-gap-md flex flex-col gap-section-margin pb-32">
+      <main className="flex-1 px-container-padding py-stack-gap-md flex flex-col gap-section-margin pb-36">
         {txStatus !== "idle" ? (
           <TransactionStatus
             status={txStatus}
@@ -214,18 +214,19 @@ export default function SendPage() {
         )}
       </main>
 
-      {/* Footer Action - Fixed at bottom, above BottomNav */}
+      {/* Footer Action - Fixed at bottom, above BottomNav with gap */}
       {txStatus === "idle" && (
-        <footer className="fixed bottom-[72px] left-0 right-0 p-container-padding bg-background pb-4 z-40">
+        <footer className="fixed bottom-20 left-0 right-0 px-container-padding pb-4 z-40 bg-gradient-to-t from-background to-transparent pt-8">
           <div className="max-w-[480px] mx-auto">
             <Button
               onClick={handleSend}
               disabled={!selectedTemplate || !amount || parseFloat(amount) < 1}
               isLoading={isLoading}
               fullWidth
-              className="gap-2"
+              size="lg"
+              className="gap-2 shadow-lg"
             >
-              <IconSend size={20} />
+              <IconSend size={24} />
               Kirim
             </Button>
           </div>
