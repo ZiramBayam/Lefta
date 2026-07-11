@@ -138,7 +138,10 @@ export const getTransfer = async (transferId: string): Promise<TransferRecord | 
 
 export const getSenderHistory = async (sender: string): Promise<TransferRecord[]> => {
   // In production, this would query the contract
-  return MOCK_TRANSFER_RECORDS.filter((t) => t.sender === sender);
+  // Sort by timestamp descending (newest first)
+  return MOCK_TRANSFER_RECORDS
+    .filter((t) => t.sender === sender)
+    .sort((a, b) => b.timestamp - a.timestamp);
 };
 
 export const getRecipientHistory = async (recipient: string): Promise<TransferRecord[]> => {

@@ -56,8 +56,9 @@ export default function SendPage() {
 
     try {
       // Call the transfer function
+      const senderAddress = "GDXK...4F2A"; // Mock sender address
       const result = await transfer(
-        "current-user",
+        senderAddress,
         selectedTemplateId,
         usdcToStroops(amountNum)
       );
@@ -68,7 +69,7 @@ export default function SendPage() {
       // Add to local history
       addToHistory({
         id: result.transferId,
-        sender: "current-user",
+        sender: senderAddress,
         templateId: selectedTemplateId,
         totalAmount: usdcToStroops(amountNum),
         timestamp: Date.now(),
