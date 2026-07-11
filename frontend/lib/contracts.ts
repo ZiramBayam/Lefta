@@ -63,6 +63,51 @@ const MOCK_TRANSFER_RECORDS: TransferRecord[] = [
   },
 ];
 
+// LocalStorage keys
+const HISTORY_STORAGE_KEY = "lefta_transfer_history";
+
+// Load history from localStorage
+const loadHistoryFromStorage = (): TransferRecord[] => {
+  if (typeof window === "undefined") return MOCK_TRANSFER_RECORDS;
+  try {
+    const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Convert amount back to bigint
+      return parsed.map((t: Record<string, unknown>) => ({
+        ...t,
+        totalAmount: BigInt(t.totalAmount as string),
+        splits: (t.splits as Array<Record<string, unknown>>).map((s) => ({
+          ...s,
+          amount: BigInt(s.amount as string),
+        })),
+      })) as TransferRecord[];
+    }
+  } catch {
+    console.error("Failed to load history from localStorage");
+  }
+  return MOCK_TRANSFER_RECORDS;
+};
+
+// Save history to localStorage
+const saveHistoryToStorage = (records: TransferRecord[]) => {
+  if (typeof window === "undefined") return;
+  try {
+    // Convert bigint to string for JSON serialization
+    const serializable = records.map(t => ({
+      ...t,
+      totalAmount: t.totalAmount.toString(),
+      splits: t.splits.map(s => ({
+        ...s,
+        amount: s.amount.toString(),
+      })),
+    }));
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(serializable));
+  } catch {
+    console.error("Failed to save history to localStorage");
+  }
+};
+
 // TemplateRegistry functions
 export const getTemplate = async (templateId: string): Promise<SplitTemplate | null> => {
   // In production, this would call the contract
@@ -132,28 +177,33 @@ export const transfer = async (
 };
 
 export const getTransfer = async (transferId: string): Promise<TransferRecord | null> => {
-  // In production, this would query the contract
-  return MOCK_TRANSFER_RECORDS.find((t) => t.id === transferId) ?? null;
+  const history = loadHistoryFromStorage();
+  return history.find((t) => t.id === transferId) ?? null;
 };
 
 export const getSenderHistory = async (sender: string): Promise<TransferRecord[]> => {
-  // In production, this would query the contract
-  // Sort by timestamp descending (newest first)
-  return MOCK_TRANSFER_RECORDS
+  // Load fresh from localStorage
+  const history = loadHistoryFromStorage();
+  return history
     .filter((t) => t.sender === sender)
     .sort((a, b) => b.timestamp - a.timestamp);
 };
 
 export const getRecipientHistory = async (recipient: string): Promise<TransferRecord[]> => {
-  // In production, this would query the contract
-  return MOCK_TRANSFER_RECORDS.filter((t) =>
-    t.splits.some((s) => s.recipient === recipient)
-  );
+  const history = loadHistoryFromStorage();
+  return history
+    .filter((t) =>
+      t.splits.some((s) => s.recipient === recipient)
+    )
+    .sort((a, b) => b.timestamp - a.timestamp);
 };
 
 // Add a new transfer to local history (for demo purposes)
 export const addToHistory = (transfer: TransferRecord): void => {
-  MOCK_TRANSFER_RECORDS.unshift(transfer);
+  // Load current history, add new one, save back
+  const history = loadHistoryFromStorage();
+  history.unshift(transfer);
+  saveHistoryToStorage(history);
 };
 
 // Stellar Explorer URL builder
