@@ -214,9 +214,9 @@ export default function SendPage() {
         )}
       </main>
 
-      {/* Footer Action - Fixed at bottom */}
+      {/* Footer Action - Fixed at bottom, above BottomNav */}
       {txStatus === "idle" && (
-        <footer className="fixed bottom-0 left-0 right-0 p-container-padding bg-background pb-8 pt-4 z-30">
+        <footer className="fixed bottom-[72px] left-0 right-0 p-container-padding bg-background pb-4 z-40">
           <div className="max-w-[480px] mx-auto">
             <Button
               onClick={handleSend}
