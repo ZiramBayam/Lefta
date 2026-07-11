@@ -7,16 +7,15 @@ import BottomNav from "@/components/BottomNav";
 import { Button, IconSend, IconAdd, IconMoreVert } from "@/components/ui";
 import SplitBar, { SplitBarLegend } from "@/components/SplitBar";
 import AllocationBuilder from "@/components/AllocationBuilder";
-import Modal from "@/components/Modal";
+import Modal from "@/components/ui/Modal";
 import { SplitTemplate, Allocation } from "@/types";
 import { getSenderTemplates, createTemplate, deactivateTemplate } from "@/lib/contracts";
-import { useRouter } from "next/navigation";
 
 export default function TemplatesPage() {
-  const router = useRouter();
   const [templates, setTemplates] = useState<SplitTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAllocationBuilder, setShowAllocationBuilder] = useState(false);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
   useEffect(() => {
     const loadTemplates = async () => {
@@ -35,7 +34,7 @@ export default function TemplatesPage() {
 
   const handleSaveTemplate = async (allocations: Allocation[]) => {
     try {
-      const templateId = await createTemplate("current-user", allocations);
+      await createTemplate("current-user", allocations);
       // Refresh templates
       const data = await getSenderTemplates("current-user");
       setTemplates(data);
@@ -49,6 +48,7 @@ export default function TemplatesPage() {
     try {
       await deactivateTemplate(templateId);
       setTemplates((prev) => prev.filter((t) => t.id !== templateId));
+      setMenuOpen(null);
     } catch (err) {
       console.error("Failed to deactivate template:", err);
     }
@@ -95,12 +95,25 @@ export default function TemplatesPage() {
                     {template.allocations.length} pos pembagian
                   </p>
                 </div>
-                <button
-                  className="p-2 -mr-2 -mt-2 rounded-full hover:bg-surface-variant transition-colors text-on-surface-variant"
-                  aria-label="Menu"
-                >
-                  <IconMoreVert size={24} />
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setMenuOpen(menuOpen === template.id ? null : template.id)}
+                    className="p-2 -mr-2 -mt-2 rounded-full hover:bg-surface-variant transition-colors text-on-surface-variant"
+                    aria-label="Menu"
+                  >
+                    <IconMoreVert size={24} />
+                  </button>
+                  {menuOpen === template.id && (
+                    <div className="absolute right-0 top-12 bg-surface rounded-lg shadow-lg py-2 min-w-[160px] z-10">
+                      <button
+                        onClick={() => handleDeactivate(template.id)}
+                        className="w-full px-4 py-2 text-left text-body-md text-error hover:bg-surface-container transition-colors"
+                      >
+                        Nonaktifkan
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Segmented Progress Bar */}

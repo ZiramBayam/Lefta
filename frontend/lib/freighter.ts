@@ -7,10 +7,18 @@ export const NETWORK_PASSPHRASE =
 export const HORIZON_URL = "https://horizon-testnet.stellar.org";
 export const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
 
+// Freighter API type
+interface FreighterApi {
+  isConnected?: () => Promise<boolean>;
+  getAddress?: () => Promise<string>;
+  signTransaction?: (txXdr: string, opts?: { network?: string }) => Promise<string>;
+}
+
 // Check if Freighter wallet is installed
 export const checkFreighterInstalled = async (): Promise<boolean> => {
   if (typeof window === "undefined") return false;
-  return await (window as unknown as {.freighterApi?: { isConnected?: () => Promise<boolean> } }).freighterApi?.isConnected?.() ?? false;
+  const freighter = (window as unknown as { freighterApi?: FreighterApi }).freighterApi;
+  return freighter?.isConnected?.() ?? Promise.resolve(false);
 };
 
 // Connect wallet using Freighter
@@ -19,13 +27,7 @@ export const connectWallet = async (): Promise<string> => {
     throw new Error("Wallet connection only available in browser");
   }
 
-  const freighter = (window as unknown as {
-    freighterApi?: {
-      isConnected?: () => Promise<boolean>;
-      getAddress?: () => Promise<string>;
-      signTransaction?: (txXdr: string, opts?: Record<string, unknown>) => Promise<string>;
-    };
-  }).freighterApi;
+  const freighter = (window as unknown as { freighterApi?: FreighterApi }).freighterApi;
 
   if (!freighter) {
     throw new Error("Freighter wallet tidak ditemukan. Silakan install Freighter terlebih dahulu.");
@@ -50,12 +52,7 @@ export const connectWallet = async (): Promise<string> => {
 export const getWalletAddress = async (): Promise<string | null> => {
   if (typeof window === "undefined") return null;
 
-  const freighter = (window as unknown as {
-    freighterApi?: {
-      isConnected?: () => Promise<boolean>;
-      getAddress?: () => Promise<string>;
-    };
-  }).freighterApi;
+  const freighter = (window as unknown as { freighterApi?: FreighterApi }).freighterApi;
 
   if (!freighter) return null;
 
@@ -78,14 +75,10 @@ export const signXdr = async (
     throw new Error("Transaction signing only available in browser");
   }
 
-  const freighter = (window as unknown as {
-    freighterApi?: {
-      signTransaction?: (txXdr: string, opts?: Record<string, unknown>) => Promise<string>;
-    };
-  }).freighterApi;
+  const freighter = (window as unknown as { freighterApi?: FreighterApi }).freighterApi;
 
   if (!freighter?.signTransaction) {
-    throw new Error("Freighter tidak支持签名功能");
+    throw new Error("Freighter tidak mendukung fitur tanda tangan");
   }
 
   return await freighter.signTransaction(xdr, {
@@ -104,10 +97,6 @@ export const createWalletState = (): WalletState => ({
 // Freighter available type declaration
 declare global {
   interface Window {
-    freighterApi?: {
-      isConnected?: () => Promise<boolean>;
-      getAddress?: () => Promise<string>;
-      signTransaction?: (txXdr: string, opts?: Record<string, unknown>) => Promise<string>;
-    };
+    freighterApi?: FreighterApi;
   }
 }

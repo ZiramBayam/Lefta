@@ -3,7 +3,6 @@
 import { TransactionStatus as TxStatus, SplitTemplate, truncateAddress } from "@/types";
 import { getStellarExplorerUrl } from "@/lib/contracts";
 import { Button, IconCheckCircle, IconError, IconKey, IconOpenInNew } from "@/components/ui";
-import Link from "next/link";
 
 interface TransactionStatusProps {
   status: TxStatus;

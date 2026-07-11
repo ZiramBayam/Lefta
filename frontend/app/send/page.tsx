@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import TopAppBar from "@/components/TopAppBar";
 import BottomNav from "@/components/BottomNav";
-import { Button, Input, IconSend, IconExpandMore } from "@/components/ui";
+import { Button, IconSend, IconExpandMore } from "@/components/ui";
 import SplitPreview from "@/components/SplitPreview";
 import TransactionStatus from "@/components/TransactionStatus";
 import { SplitTemplate, TransactionStatus as TxStatus, ERROR_MESSAGES } from "@/types";

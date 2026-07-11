@@ -1,10 +1,12 @@
 // Contract call wrappers for TemplateRegistry and SplitRouter
-import { Allocation, SplitTemplate, TransferRecord, SplitResult } from "@/types";
+import { Allocation, SplitTemplate, TransferRecord } from "@/types";
 import { NETWORK_PASSPHRASE, HORIZON_URL, SOROBAN_RPC_URL } from "./freighter";
 
-// Contract addresses (will be loaded from deployed.json)
-const TEMPLATE_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_TEMPLATE_REGISTRY_ADDRESS || "";
-const SPLIT_ROUTER_ADDRESS = process.env.NEXT_PUBLIC_SPLIT_ROUTER_ADDRESS || "";
+// Contract addresses (will be loaded from deployed.json
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _TEMPLATE_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_TEMPLATE_REGISTRY_ADDRESS || "";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _SPLIT_ROUTER_ADDRESS = process.env.NEXT_PUBLIC_SPLIT_ROUTER_ADDRESS || "";
 
 // Mock data for development
 const MOCK_TEMPLATES: SplitTemplate[] = [
@@ -68,7 +70,7 @@ export const getTemplate = async (templateId: string): Promise<SplitTemplate | n
   return MOCK_TEMPLATES.find((t) => t.id === templateId) ?? null;
 };
 
-export const getSenderTemplates = async (sender: string): Promise<SplitTemplate[]> => {
+export const getSenderTemplates = async (/* eslint-disable-line @typescript-eslint/no-unused-vars */ _sender: string): Promise<SplitTemplate[]> => {
   // In production, this would call the contract
   // For now, return mock data filtered by sender
   return MOCK_TEMPLATES.filter((t) => t.isActive);
@@ -114,9 +116,12 @@ export const deactivateTemplate = async (templateId: string): Promise<void> => {
 
 // SplitRouter functions
 export const transfer = async (
-  sender: string,
-  templateId: string,
-  amount: bigint
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _sender: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _templateId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _amount: bigint
 ): Promise<{ transferId: string; txHash: string }> => {
   // In production, this would build and submit the transaction
   // For demo, return mock transfer ID

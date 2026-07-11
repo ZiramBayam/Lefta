@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Allocation } from "@/types";
 import { Button, Input, IconAdd, IconClose } from "@/components/ui";
 

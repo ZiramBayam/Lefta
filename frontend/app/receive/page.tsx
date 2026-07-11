@@ -6,7 +6,6 @@ import BottomNav from "@/components/BottomNav";
 import RecipientDashboard from "@/components/RecipientDashboard";
 import { getRecipientHistory } from "@/lib/contracts";
 import { TransferRecord } from "@/types";
-import { stroopsToUsdc, truncateAddress } from "@/types";
 import Link from "next/link";
 import { Button, IconReceipt } from "@/components/ui";
 

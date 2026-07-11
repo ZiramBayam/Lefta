@@ -1,6 +1,6 @@
 "use client";
 
-import { TransferRecord, truncateAddress } from "@/types";
+import { TransferRecord } from "@/types";
 import { stroopsToUsdc } from "@/types";
 
 interface RecipientDashboardProps {
@@ -19,11 +19,13 @@ export default function RecipientDashboard({
   currentAddress,
 }: RecipientDashboardProps) {
   // Filter transfers where current address is a recipient
-  const incomingTransfers = transfers.filter((transfer) =>
-    transfer.splits.some(
-      (split) => split.recipient === currentAddress || split.recipient.includes(currentAddress.slice(0, 8)))
-    )
-  );
+  const incomingTransfers = transfers.filter((transfer) => {
+    return transfer.splits.some((split) => {
+      const isMatch = split.recipient === currentAddress ||
+        split.recipient.includes(currentAddress.slice(0, 8));
+      return isMatch;
+    });
+  });
 
   // Aggregate by label for current month
   const now = new Date();
@@ -40,7 +42,9 @@ export default function RecipientDashboard({
 
   monthlyTransfers.forEach((transfer) => {
     transfer.splits.forEach((split) => {
-      if (split.recipient === currentAddress || split.recipient.includes(currentAddress.slice(0, 8))) {
+      const isMatch = split.recipient === currentAddress ||
+        split.recipient.includes(currentAddress.slice(0, 8));
+      if (isMatch) {
         const amount = parseFloat(stroopsToUsdc(split.amount));
         if (!aggregatedByLabel[split.label]) {
           aggregatedByLabel[split.label] = {
@@ -105,7 +109,7 @@ export default function RecipientDashboard({
 
         {Object.values(aggregatedByLabel)
           .sort((a, b) => b.total - a.total)
-          .map((item, index) => (
+          .map((item) => (
             <div
               key={item.label}
               className="
