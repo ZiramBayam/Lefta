@@ -23,7 +23,6 @@ const config: Config = {
         'on-primary': '#ffffff',
         'primary-container': '#d1e231',
         'on-primary-container': '#5a6300',
-        'inverse-primary': '#c0d11b',
         secondary: '#5a5d70',
         'on-secondary': '#ffffff',
         'secondary-container': '#dee1f8',

@@ -1,3 +1,6 @@
+# Reference repos — bahan belajar, bukan bagian dari submission
+reference/
+
 # Rust/WebAssembly
 target/
 *.wasm
