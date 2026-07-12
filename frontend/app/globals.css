@@ -121,6 +121,39 @@ body {
   animation: spin 1s linear infinite;
 }
 
+/* Marquee animation */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-33.33%); }
+}
+
+.marquee-track {
+  animation: marquee 30s linear infinite;
+  width: fit-content;
+}
+
+/* Hover-expand cards (tanur.app pattern) */
+.detail-content {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.3s ease, max-height 0.3s ease;
+}
+
+.featured-card .detail-content,
+.group:hover .detail-content,
+.group:focus-within .detail-content {
+  opacity: 1;
+  max-height: 500px;
+}
+
+@media (max-width: 640px) {
+  .detail-content {
+    opacity: 1;
+    max-height: none;
+  }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
