@@ -12,7 +12,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    href: "/",
+    href: "/app",
     label: "Home",
     icon: <IconHome size={24} />,
   },
@@ -28,8 +28,8 @@ export default function BottomNav() {
 
   // Check if current path is active (simplified matching)
   const isActive = (href: string) => {
-    if (href === "/") {
-      return pathname === "/" || pathname.startsWith("/send") || pathname.startsWith("/receive");
+    if (href === "/app") {
+      return pathname === "/app" || pathname.startsWith("/send") || pathname.startsWith("/receive");
     }
     return pathname.startsWith(href);
   };

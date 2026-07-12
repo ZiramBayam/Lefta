@@ -32,9 +32,9 @@ export default function TopAppBar({
       >
         <div className="flex items-center gap-2">
           {showBackButton ? (
-            <Link
-              href="/"
-              className="
+              <Link
+                href="/app"
+                className="
                 w-12 h-12
                 flex items-center justify-center
                 rounded-full
