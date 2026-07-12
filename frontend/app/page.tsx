@@ -1,3 +1,5 @@
+import SmoothScrollProvider from "@/components/SmoothScrollProvider";
+import ScrollReveal from "@/components/ScrollReveal";
 import LandingNav from "@/components/landing/LandingNav";
 import HeroSection from "@/components/landing/HeroSection";
 import MarqueeBar from "@/components/landing/MarqueeBar";
@@ -12,18 +14,38 @@ import Footer from "@/components/landing/Footer";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-background">
-      <LandingNav />
-      <HeroSection />
-      <MarqueeBar />
-      <ProblemSection />
-      <HowItWorks />
-      <TrustSection />
-      <SplitVisual />
-      <OnChainProof />
-      <StatsCounter />
-      <FinalCta />
-      <Footer />
-    </div>
+    <SmoothScrollProvider>
+      <div className="min-h-screen bg-background">
+        <LandingNav />
+        <HeroSection />
+        <ScrollReveal>
+          <MarqueeBar />
+        </ScrollReveal>
+        <ScrollReveal delay={0.1}>
+          <ProblemSection />
+        </ScrollReveal>
+        <ScrollReveal delay={0.1}>
+          <HowItWorks />
+        </ScrollReveal>
+        <ScrollReveal delay={0.15}>
+          <TrustSection />
+        </ScrollReveal>
+        <ScrollReveal delay={0.1}>
+          <SplitVisual />
+        </ScrollReveal>
+        <ScrollReveal delay={0.15}>
+          <OnChainProof />
+        </ScrollReveal>
+        <ScrollReveal delay={0.1}>
+          <StatsCounter />
+        </ScrollReveal>
+        <ScrollReveal delay={0.1}>
+          <FinalCta />
+        </ScrollReveal>
+        <ScrollReveal>
+          <Footer />
+        </ScrollReveal>
+      </div>
+    </SmoothScrollProvider>
   );
 }
