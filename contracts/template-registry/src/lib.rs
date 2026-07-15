@@ -1,8 +1,9 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype,
+    contract, contracterror, contractevent, contractimpl, contracttype,
     Address, Bytes, BytesN, Env, String, Vec,
+    xdr::ToXdr,
 };
 
 const MAX_LABEL_LENGTH: u32 = 20;
@@ -13,7 +14,7 @@ const TOTAL_BASIS_POINTS: u32 = 10000;
 #[derive(Clone, Debug)]
 pub struct Allocation {
     pub label: String,
-    pub recipient: Address,
+    pub recipient: Address, // Stellar address - user input when creating template
     pub basis_points: u32,
 }
 
@@ -33,6 +34,7 @@ pub struct SplitTemplate {
 pub enum DataKey {
     Template(BytesN<32>),
     SenderTemplates(Address),
+    Nonce(Address),
 }
 
 #[contracterror]
@@ -49,6 +51,23 @@ pub enum ContractError {
     DuplicateRecipient = 8,
 }
 
+// --- Events ---
+
+#[contractevent(topics = ["template", "create"], data_format = "single-value")]
+pub struct TemplateCreated {
+    pub template_id: BytesN<32>,
+}
+
+#[contractevent(topics = ["template", "update"], data_format = "single-value")]
+pub struct TemplateUpdated {
+    pub template_id: BytesN<32>,
+}
+
+#[contractevent(topics = ["template", "deactivate"], data_format = "single-value")]
+pub struct TemplateDeactivated {
+    pub template_id: BytesN<32>,
+}
+
 #[contract]
 pub struct TemplateRegistryContract;
 
@@ -63,10 +82,8 @@ impl TemplateRegistryContract {
 
         Self::validate_allocations(&env, &allocations)?;
 
-        let mut data = Bytes::new(&env);
-        data.append(&Bytes::from_array(&env, &env.ledger().sequence().to_le_bytes()));
-        data.append(&Bytes::from_array(&env, &env.ledger().timestamp().to_le_bytes()));
-        let template_id: BytesN<32> = env.crypto().sha256(&data).into();
+        let nonce = Self::get_and_increment_nonce(&env, &sender);
+        let template_id = Self::generate_id(&env, &sender, nonce);
 
         let now = env.ledger().timestamp();
 
@@ -79,15 +96,19 @@ impl TemplateRegistryContract {
             updated_at: now,
         };
 
-        env.storage().instance().set(&DataKey::Template(template_id.clone()), &template);
+        env.storage().persistent().set(&DataKey::Template(template_id.clone()), &template);
+        env.storage().persistent().extend_ttl(&DataKey::Template(template_id.clone()), 100, 518400);
 
         let mut sender_templates = Self::get_sender_templates(env.clone(), sender.clone());
         sender_templates.push_back(template_id.clone());
         env.storage()
-            .instance()
-            .set(&DataKey::SenderTemplates(sender), &sender_templates);
+            .persistent()
+            .set(&DataKey::SenderTemplates(sender.clone()), &sender_templates);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::SenderTemplates(sender), 100, 518400);
 
-        env.storage().instance().extend_ttl(100, 518400);
+        TemplateCreated { template_id: template_id.clone() }.publish(&env);
 
         Ok(template_id)
     }
@@ -102,7 +123,7 @@ impl TemplateRegistryContract {
 
         let template: SplitTemplate = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Template(template_id.clone()))
             .ok_or(ContractError::TemplateNotFound)?;
 
@@ -126,10 +147,13 @@ impl TemplateRegistryContract {
         };
 
         env.storage()
-            .instance()
-            .set(&DataKey::Template(template_id), &updated_template);
+            .persistent()
+            .set(&DataKey::Template(template_id.clone()), &updated_template);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Template(template_id.clone()), 100, 518400);
 
-        env.storage().instance().extend_ttl(100, 518400);
+        TemplateUpdated { template_id }.publish(&env);
 
         Ok(())
     }
@@ -143,7 +167,7 @@ impl TemplateRegistryContract {
 
         let mut template: SplitTemplate = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Template(template_id.clone()))
             .ok_or(ContractError::TemplateNotFound)?;
 
@@ -155,33 +179,55 @@ impl TemplateRegistryContract {
         template.updated_at = env.ledger().timestamp();
 
         env.storage()
-            .instance()
-            .set(&DataKey::Template(template_id), &template);
+            .persistent()
+            .set(&DataKey::Template(template_id.clone()), &template);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Template(template_id.clone()), 100, 518400);
 
-        env.storage().instance().extend_ttl(100, 518400);
+        TemplateDeactivated { template_id }.publish(&env);
 
         Ok(())
     }
 
     pub fn get_template(env: Env, template_id: BytesN<32>) -> Result<SplitTemplate, ContractError> {
         env.storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Template(template_id))
             .ok_or(ContractError::TemplateNotFound)
     }
 
     pub fn get_sender_templates(env: Env, sender: Address) -> Vec<BytesN<32>> {
         env.storage()
-            .instance()
+            .persistent()
             .get(&DataKey::SenderTemplates(sender))
             .unwrap_or_else(|| Vec::new(&env))
     }
 
     pub fn is_active(env: Env, template_id: BytesN<32>) -> bool {
-        match env.storage().instance().get::<_, SplitTemplate>(&DataKey::Template(template_id)) {
+        match env.storage().persistent().get::<_, SplitTemplate>(&DataKey::Template(template_id)) {
             Some(template) => template.is_active,
             None => false,
         }
+    }
+
+    // --- Internal helpers ---
+
+    fn get_and_increment_nonce(env: &Env, sender: &Address) -> u64 {
+        let key = DataKey::Nonce(sender.clone());
+        let nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+        env.storage().persistent().set(&key, &(nonce + 1));
+        env.storage().persistent().extend_ttl(&key, 100, 518400);
+        nonce
+    }
+
+    fn generate_id(env: &Env, sender: &Address, nonce: u64) -> BytesN<32> {
+        let mut data = Bytes::new(env);
+        data.append(&sender.to_xdr(env));
+        data.append(&Bytes::from_array(env, &nonce.to_le_bytes()));
+        data.append(&Bytes::from_array(env, &env.ledger().timestamp().to_le_bytes()));
+        data.append(&Bytes::from_array(env, &env.ledger().sequence().to_le_bytes()));
+        env.crypto().sha256(&data).into()
     }
 
     fn validate_allocations(env: &Env, allocations: &Vec<Allocation>) -> Result<(), ContractError> {
@@ -223,16 +269,14 @@ impl TemplateRegistryContract {
     }
 }
 
-// ponytail: Pure logic tests - no testutils needed
 #[cfg(test)]
 mod test {
     use super::*;
 
-    fn create_allocation(label: &str, basis_points: u32) -> Allocation {
-        let env = Env::default();
+    fn make_alloc(env: &Env, label: &str, basis_points: u32) -> Allocation {
         Allocation {
-            label: String::from_str(&env, label),
-            recipient: Address::generate(&env),
+            label: String::from_str(env, label),
+            recipient: Address::generate(env),
             basis_points,
         }
     }
@@ -249,12 +293,8 @@ mod test {
     fn test_validate_too_many_allocations() {
         let env = Env::default();
         let mut allocs: Vec<Allocation> = Vec::new(&env);
-        for i in 0..6 {
-            allocs.push_back(Allocation {
-                label: String::from_str(&env, &format!("Pos{}", i)),
-                recipient: Address::generate(&env),
-                basis_points: 1666,
-            });
+        for _ in 0..6u32 {
+            allocs.push_back(make_alloc(&env, "Pos", 1666));
         }
         let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert_eq!(result, Err(ContractError::TooManyAllocations));
@@ -265,8 +305,8 @@ mod test {
         let env = Env::default();
         let allocs: Vec<Allocation> = vec![
             &env,
-            create_allocation("A", 6000),
-            create_allocation("B", 3999),
+            make_alloc(&env, "A", 6000),
+            make_alloc(&env, "B", 3999),
         ];
         let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert_eq!(result, Err(ContractError::InvalidBasisPoints));
@@ -277,20 +317,8 @@ mod test {
         let env = Env::default();
         let allocs: Vec<Allocation> = vec![
             &env,
-            create_allocation("A", 6000),
-            create_allocation("B", 4001),
-        ];
-        let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
-        assert_eq!(result, Err(ContractError::InvalidBasisPoints));
-    }
-
-    #[test]
-    fn test_validate_invalid_basis_points_5000() {
-        let env = Env::default();
-        let allocs: Vec<Allocation> = vec![
-            &env,
-            create_allocation("A", 5000),
-            create_allocation("B", 5000),
+            make_alloc(&env, "A", 6000),
+            make_alloc(&env, "B", 4001),
         ];
         let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert_eq!(result, Err(ContractError::InvalidBasisPoints));
@@ -301,8 +329,8 @@ mod test {
         let env = Env::default();
         let allocs: Vec<Allocation> = vec![
             &env,
-            create_allocation("A", 6000),
-            create_allocation("B", 4000),
+            make_alloc(&env, "A", 6000),
+            make_alloc(&env, "B", 4000),
         ];
         let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert!(result.is_ok());
@@ -378,12 +406,8 @@ mod test {
     fn test_validate_max_allocations_5() {
         let env = Env::default();
         let mut allocs: Vec<Allocation> = Vec::new(&env);
-        for i in 0..5 {
-            allocs.push_back(Allocation {
-                label: String::from_str(&env, &format!("Pos{}", i)),
-                recipient: Address::generate(&env),
-                basis_points: 2000,
-            });
+        for _ in 0..5u32 {
+            allocs.push_back(make_alloc(&env, "Pos", 2000));
         }
         let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert!(result.is_ok());
@@ -394,15 +418,14 @@ mod test {
         let env = Env::default();
         let allocs: Vec<Allocation> = vec![
             &env,
-            create_allocation("Full", 10000),
+            make_alloc(&env, "Full", 10000),
         ];
         let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_validate_duplicate_recipient_not_next() {
-        // Duplicate not adjacent - should still catch
+    fn test_validate_duplicate_recipient_not_adjacent() {
         let env = Env::default();
         let recipient = Address::generate(&env);
         let other = Address::generate(&env);
@@ -410,7 +433,7 @@ mod test {
             &env,
             Allocation {
                 label: String::from_str(&env, "A"),
-                recipient: other.clone(),
+                recipient: other,
                 basis_points: 3000,
             },
             Allocation {
@@ -430,7 +453,6 @@ mod test {
 
     #[test]
     fn test_validate_all_unique_recipients() {
-        // Different recipients should pass
         let env = Env::default();
         let r1 = Address::generate(&env);
         let r2 = Address::generate(&env);
@@ -443,5 +465,24 @@ mod test {
         ];
         let result = TemplateRegistryContract::validate_allocations(&env, &allocs);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_generate_id_unique_per_nonce() {
+        let env = Env::default();
+        let sender = Address::generate(&env);
+        let id1 = TemplateRegistryContract::generate_id(&env, &sender, 0);
+        let id2 = TemplateRegistryContract::generate_id(&env, &sender, 1);
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn test_generate_id_unique_per_sender() {
+        let env = Env::default();
+        let sender1 = Address::generate(&env);
+        let sender2 = Address::generate(&env);
+        let id1 = TemplateRegistryContract::generate_id(&env, &sender1, 0);
+        let id2 = TemplateRegistryContract::generate_id(&env, &sender2, 0);
+        assert_ne!(id1, id2);
     }
 }
