@@ -55,8 +55,20 @@ async function signSubmit(publicKey: string, tx: any): Promise<string> {
   if (signResult.error) throw new Error(`Freighter: ${signResult.error}`);
   const signedTx = TransactionBuilder.fromXDR(signResult.signedTxXdr, NETWORK_CONFIG.networkPassphrase);
   const result = await server.sendTransaction(signedTx);
-  if (result.status === 'ERROR') throw new Error('Transaction rejected');
-  await server.pollTransaction(result.hash);
+  if (result.status === 'ERROR') {
+    // Coba ambil detail error dari Soroban
+    const errDetail = (result as any).errorResult
+      ? JSON.stringify((result as any).errorResult)
+      : 'Transaction rejected by network';
+    throw new Error(errDetail);
+  }
+  const confirmed = await server.pollTransaction(result.hash);
+  if (confirmed.status === 'FAILED') {
+    const errDetail = (confirmed as any).resultXdr
+      ? `Transaction failed: ${(confirmed as any).resultXdr}`
+      : 'Transaction failed after submission';
+    throw new Error(errDetail);
+  }
   return result.hash;
 }
 
