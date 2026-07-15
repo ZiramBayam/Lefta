@@ -40,6 +40,15 @@ pub struct SplitResult {
 
 #[contracttype]
 #[derive(Clone)]
+pub struct TransferRecord {
+    pub sender: Address,
+    pub total_amount: i128,
+    pub timestamp: u64,
+    pub splits: Vec<SplitResult>,
+}
+
+#[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Template(BytesN<32>),
     Transfer(BytesN<32>),
@@ -178,6 +187,15 @@ impl SplitRouterContract {
             }
         }
 
+        let record = TransferRecord {
+            sender: sender.clone(),
+            total_amount: amount,
+            timestamp: now,
+            splits: splits.clone(),
+        };
+        env.storage().persistent().set(&DataKey::Transfer(transfer_id.clone()), &record);
+        env.storage().persistent().extend_ttl(&DataKey::Transfer(transfer_id.clone()), 100, 518400);
+
         TransferExecuted { transfer_id: transfer_id.clone() }.publish(&env);
 
         Ok(transfer_id)
@@ -212,6 +230,21 @@ impl SplitRouterContract {
         // Execute transfer
         let token_client = soroban_sdk::token::Client::new(&env, &usdc_token_id);
         token_client.transfer(&sender, &to, &amount);
+
+        let mut splits = Vec::new(&env);
+        splits.push_back(SplitResult {
+            recipient: to.clone(),
+            label: String::from_str(&env, "Direct Transfer"),
+            amount,
+        });
+        let record = TransferRecord {
+            sender: sender.clone(),
+            total_amount: amount,
+            timestamp: env.ledger().timestamp(),
+            splits,
+        };
+        env.storage().persistent().set(&DataKey::Transfer(transfer_id.clone()), &record);
+        env.storage().persistent().extend_ttl(&DataKey::Transfer(transfer_id.clone()), 100, 518400);
 
         TransferExecuted { transfer_id: transfer_id.clone() }.publish(&env);
 
@@ -259,6 +292,20 @@ impl SplitRouterContract {
             .persistent()
             .get(&DataKey::SenderHistory(sender))
             .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    pub fn get_recipient_transfers(env: Env, recipient: Address) -> Vec<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RecipientHistory(recipient))
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    pub fn get_transfer(env: Env, transfer_id: BytesN<32>) -> Result<TransferRecord, ContractError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Transfer(transfer_id))
+            .ok_or(ContractError::TransferNotFound)
     }
 
     // --- Internal helpers ---

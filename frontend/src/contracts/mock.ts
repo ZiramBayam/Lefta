@@ -137,6 +137,12 @@ export async function mockSendDirect(
   }
 
   const transferId = generateId(`direct-${sender}-${to}-${amount}`);
+  const splits = [{
+    stellarAddress: to,
+    category: 'Direct Transfer',
+    percentage: 100,
+    amount: amountNum.toString(),
+  }];
 
   if (typeof window !== 'undefined') {
     const transfers = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRANSFERS) || '{}');
@@ -145,6 +151,7 @@ export async function mockSendDirect(
       sender,
       to,
       amount,
+      splits,
       timestamp: Date.now(),
       direct: true,
     };
@@ -188,6 +195,21 @@ export async function mockGetSenderHistory(sender: string): Promise<string[]> {
   if (typeof window === 'undefined') return [];
   const transfers = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRANSFERS) || '{}');
   return Object.keys(transfers).filter(id => transfers[id]?.sender === sender);
+}
+
+function getTransfers(): Record<string, any> {
+  if (typeof window === 'undefined') return {};
+  return JSON.parse(localStorage.getItem(STORAGE_KEYS.TRANSFERS) || '{}');
+}
+
+export async function mockGetRecipientTransfers(recipient: string): Promise<string[]> {
+  const transfers = getTransfers();
+  return Object.keys(transfers).filter(id => {
+    const tx = transfers[id];
+    if (!tx) return false;
+    if (tx.direct) return tx.to === recipient;
+    return tx.splits?.some((s: any) => s.stellarAddress === recipient);
+  });
 }
 
 // Clear mock data (for testing)

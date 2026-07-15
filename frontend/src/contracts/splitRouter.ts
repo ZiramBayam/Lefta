@@ -127,6 +127,15 @@ export async function trDeactivateTemplate(publicKey: string, templateIdHex: str
 const SR = CONTRACT_ADDRESSES.splitRouter;
 const USDC_ADDR = TOKEN_ADDRESSES.usdcContract;
 
+export async function srGetRecipientTransfers(recipient: string): Promise<string[]> {
+  const raw = await simulateRes(SR, 'get_recipient_transfers', [addrS(recipient)]);
+  return (raw as any[]).map((b: Uint8Array) => Buffer.from(b).toString('hex'));
+}
+
+export async function srGetTransfer(transferIdHex: string): Promise<any> {
+  return simulateRes(SR, 'get_transfer', [bytes32(transferIdHex)]);
+}
+
 export async function srSendDirect(publicKey: string, to: string, amount: number): Promise<string> {
   const tx = await buildTx(publicKey, [
     invokeOp(SR, 'send_direct', [

@@ -12,25 +12,15 @@ interface UseDepositFlowParams {
 
 export function useDepositFlow({ stellarAddress, rates, setTransactions }: UseDepositFlowParams) {
   const [depositAmount, setDepositAmount] = useState('');
-  const [depositStep, setDepositStep] = useState<1 | 2 | 3>(1);
+  const [depositStep, setDepositStep] = useState<1 | 2>(1);
   const [depositError, setDepositError] = useState('');
   const [isDepositing, setIsDepositing] = useState(false);
   const [depositTxHash, setDepositTxHash] = useState('');
 
-  const executeDeposit = () => {
+  const executeDeposit = async () => {
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount <= 0) {
       setDepositError('Masukkan jumlah deposit yang valid');
-      return;
-    }
-    setDepositError('');
-    setDepositStep(2);
-  };
-
-  const confirmDepositPayment = async () => {
-    const amount = parseFloat(depositAmount);
-    if (isNaN(amount) || amount <= 0) {
-      setDepositError('Jumlah deposit tidak valid');
       return;
     }
 
@@ -43,23 +33,21 @@ export function useDepositFlow({ stellarAddress, rates, setTransactions }: UseDe
     setDepositError('');
 
     const trustline = await ensureTrustline(stellarAddress);
-
     if (!trustline.success) {
-      setDepositError(trustline.error || 'Gagal setup trustline. Coba lagi.');
+      setDepositError(trustline.error || 'Gagal setup trustline.');
       setIsDepositing(false);
       return;
     }
 
     const result = await faucetDeposit(stellarAddress, amount);
-
     if (result.success && result.hash) {
       const amountIdr = amount * rates.USDC_TO_IDR;
       const newTx: Transaction = {
         id: `TX-${Math.floor(1000 + Math.random() * 9000)}`,
         type: 'received',
-        amount: amount,
+        amount,
         currency: 'USDC',
-        amountIdr: amountIdr,
+        amountIdr,
         destinationAddress: stellarAddress,
         sourceAddress: 'Lefta Faucet Testnet',
         timestamp: new Date().toISOString(),
@@ -70,7 +58,7 @@ export function useDepositFlow({ stellarAddress, rates, setTransactions }: UseDe
 
       setTransactions(prev => [newTx, ...prev]);
       setDepositTxHash(result.hash);
-      setDepositStep(3);
+      setDepositStep(2);
     } else {
       setDepositError(result.error || 'Deposit gagal. Coba lagi.');
     }
@@ -115,7 +103,7 @@ export function useDepositFlow({ stellarAddress, rates, setTransactions }: UseDe
 
       setTransactions(prev => [newTx, ...prev]);
       setDepositTxHash(result.hash);
-      setDepositStep(3);
+      setDepositStep(2);
     } else {
       setDepositError(result.error || 'Deposit gagal. Coba lagi.');
     }
@@ -138,7 +126,6 @@ export function useDepositFlow({ stellarAddress, rates, setTransactions }: UseDe
     isDepositing,
     depositTxHash,
     executeDeposit,
-    confirmDepositPayment,
     handleInstantDeposit1000,
     resetDepositForm,
   };

@@ -18,7 +18,7 @@ interface WalletModalProps {
   handleCopyAddress: (address: string) => void;
   handleResetWalletCache: () => void;
   setShowDepositDrawer: (show: boolean) => void;
-  setDepositStep: (step: 1 | 2 | 3) => void;
+  setDepositStep: (step: 1 | 2) => void;
   setDepositAmount: (amount: string) => void;
   setDepositError: (error: string) => void;
 }

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw, TrendingUp, ArrowUpRight, Coins, Info } from 'lucide-react';
+import { RefreshCw, TrendingUp, ArrowUpRight, Coins, Info, Search } from 'lucide-react';
 import { WalletBalances } from '@/lib/types';
 import { useLanguage, useExchangeRates } from '@/context/AppContext';
 
@@ -14,10 +14,11 @@ interface HomeTabProps {
   syncStellarBalances: () => void;
   setSendStep: (step: number) => void;
   setShowSendDrawer: (show: boolean) => void;
-  setDepositStep: (step: 1 | 2 | 3) => void;
+  setDepositStep: (step: 1 | 2) => void;
   setDepositAmount: (amount: string) => void;
   setDepositError: (error: string) => void;
   setShowDepositDrawer: (show: boolean) => void;
+  setShowReceiptDrawer: (show: boolean) => void;
 }
 
 export function HomeTab({
@@ -31,7 +32,8 @@ export function HomeTab({
   setDepositStep,
   setDepositAmount,
   setDepositError,
-  setShowDepositDrawer
+  setShowDepositDrawer,
+  setShowReceiptDrawer
 }: HomeTabProps) {
   const { t, language } = useLanguage();
   const { USDC_TO_IDR } = useExchangeRates();
@@ -126,6 +128,17 @@ export function HomeTab({
           <span className="font-bold text-base">{t('home.btn_deposit')}</span>
         </button>
       </div>
+
+      {/* Cek Penerimaan Button */}
+      <button
+        onClick={() => setShowReceiptDrawer(true)}
+        className="w-full h-14 bg-surface-container-low border border-outline-variant/20 rounded-2xl flex items-center justify-center gap-2.5 hover:bg-surface-container-high active:scale-99 transition-all group cursor-pointer"
+      >
+        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center group-hover:-translate-y-0.5 transition-transform">
+          <Search className="w-5 h-5 text-primary" />
+        </div>
+        <span className="font-bold text-sm text-on-surface">{t('home.btn_check')}</span>
+      </button>
 
       {/* Info Tip / Education Banner */}
       <div className="bg-tertiary-container/20 border border-tertiary/20 rounded-2xl p-4 text-xs text-on-tertiary-container flex gap-3 text-left">

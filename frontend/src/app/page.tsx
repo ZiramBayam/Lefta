@@ -14,6 +14,7 @@ import { WalletModal } from '@/components/drawers/WalletModal';
 import { TransactionDetailModal } from '@/components/drawers/TransactionDetailModal';
 import { DepositDrawer } from '@/components/drawers/DepositDrawer';
 import { SendDrawer } from '@/components/drawers/SendDrawer';
+import { ReceiptDrawer } from '@/components/drawers/ReceiptDrawer';
 import { HomeTab } from '@/components/tabs/HomeTab';
 import { TemplatesTab } from '@/components/tabs/TemplatesTab';
 import { HistoryTab } from '@/components/tabs/HistoryTab';
@@ -34,6 +35,7 @@ export default function Home() {
   const [showSendDrawer, setShowSendDrawer] = useState(false);
   const [showDepositDrawer, setShowDepositDrawer] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showReceiptDrawer, setShowReceiptDrawer] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
   const [stellarAddress, setStellarAddress] = useState<string>(() => {
@@ -230,6 +232,7 @@ export default function Home() {
                     setDepositAmount={depositFlow.setDepositAmount}
                     setDepositError={depositFlow.setDepositError}
                     setShowDepositDrawer={setShowDepositDrawer}
+                    setShowReceiptDrawer={setShowReceiptDrawer}
                   />
                 )}
 
@@ -316,11 +319,16 @@ export default function Home() {
         depositError={depositFlow.depositError}
         setDepositError={depositFlow.setDepositError}
         executeDeposit={depositFlow.executeDeposit}
-        confirmDepositPayment={depositFlow.confirmDepositPayment}
         handleInstantDeposit1000={depositFlow.handleInstantDeposit1000}
         resetDepositForm={() => { depositFlow.resetDepositForm(); setShowDepositDrawer(false); }}
         isDepositing={depositFlow.isDepositing}
         depositTxHash={depositFlow.depositTxHash}
+      />
+
+      <ReceiptDrawer
+        showReceiptDrawer={showReceiptDrawer}
+        setShowReceiptDrawer={setShowReceiptDrawer}
+        stellarAddress={stellarAddress}
       />
 
       <SendDrawer

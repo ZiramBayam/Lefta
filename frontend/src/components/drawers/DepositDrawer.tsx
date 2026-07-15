@@ -2,19 +2,18 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Coins, X, Info, Sparkles, ChevronRight, XCircle, Copy, Check, CheckCircle2 } from 'lucide-react';
+import { Coins, X, Info, Sparkles, ChevronRight, XCircle, CheckCircle2 } from 'lucide-react';
 import { useLanguage, useExchangeRates } from '@/context/AppContext';
 
 interface DepositDrawerProps {
   showDepositDrawer: boolean;
   depositAmount: string;
   setDepositAmount: (amount: string) => void;
-  depositStep: 1 | 2 | 3;
-  setDepositStep: (step: 1 | 2 | 3) => void;
+  depositStep: 1 | 2;
+  setDepositStep: (step: 1 | 2) => void;
   depositError: string;
   setDepositError: (error: string) => void;
   executeDeposit: () => void;
-  confirmDepositPayment: () => void;
   handleInstantDeposit1000: () => void;
   resetDepositForm: () => void;
   isDepositing?: boolean;
@@ -30,7 +29,6 @@ export function DepositDrawer({
   depositError,
   setDepositError,
   executeDeposit,
-  confirmDepositPayment,
   handleInstantDeposit1000,
   resetDepositForm,
   isDepositing = false,
@@ -175,80 +173,24 @@ export function DepositDrawer({
                   {/* Submit form */}
                   <button
                     onClick={executeDeposit}
-                    className="w-full py-4 bg-emerald-600 text-white font-extrabold rounded-xl active:scale-98 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer text-xs uppercase"
+                    disabled={isDepositing}
+                    className={`w-full py-4 font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 mt-2 uppercase ${
+                      isDepositing
+                        ? 'bg-emerald-400 text-white cursor-not-allowed'
+                        : 'bg-emerald-600 text-white active:scale-98 hover:bg-emerald-700 cursor-pointer'
+                    } transition-all`}
                   >
-                    {t('deposit.btn_next')} <ChevronRight className="w-5 h-5" />
+                    {isDepositing ? (
+                      <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Mendeposit...</>
+                    ) : (
+                      <>{t('deposit.btn_next')} <ChevronRight className="w-5 h-5" /></>
+                    )}
                   </button>
                 </div>
               )}
 
-              {/* Step 2: Payment Simulation (Virtual Account / QRIS) */}
+              {/* Step 2: Success Screen */}
               {depositStep === 2 && (
-                <div className="flex flex-col gap-4">
-                  <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/20 flex flex-col gap-3 text-left">
-                    <span className="text-[10px] font-black text-on-surface-variant uppercase tracking-wider">{t('deposit.step2_title')}</span>
-
-                    <div className="flex justify-between items-center py-2 border-b border-outline-variant/10">
-                      <span className="text-xs text-on-surface-variant font-medium">{t('deposit.label_amount')}</span>
-                      <span className="text-base font-extrabold text-on-surface">
-                        Rp {(parseFloat(depositAmount) * USDC_TO_IDR).toLocaleString(language === 'ID' ? 'id-ID' : 'en-US')} IDR
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center py-2 border-b border-outline-variant/10">
-                      <span className="text-xs text-on-surface-variant font-medium">{language === 'ID' ? 'Nilai Deposit' : 'Deposit Value'}</span>
-                      <span className="text-sm font-bold text-primary">
-                        {depositAmount} USDC
-                      </span>
-                    </div>
-
-                    {/* Payment Method Option */}
-                    <div className="flex flex-col gap-1.5 py-1">
-                      <span className="text-[10px] text-on-surface-variant font-bold uppercase">{t('deposit.va_label')}</span>
-                      <div className="bg-white p-3 rounded-xl border border-outline-variant/15 flex justify-between items-center font-mono text-sm font-bold">
-                        <span>8856 0812 3456 7890</span>
-                        <button
-                          onClick={() => navigator.clipboard.writeText('8856081234567890')}
-                          className="text-primary hover:scale-110 active:scale-95 cursor-pointer"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <p className="text-[10px] text-on-surface-variant leading-relaxed">
-                      {t('deposit.step2_desc')}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={confirmDepositPayment}
-                      disabled={isDepositing}
-                      className={`w-full py-4 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 uppercase ${
-                        isDepositing
-                          ? 'bg-emerald-400 text-white cursor-not-allowed'
-                          : 'bg-emerald-600 text-white active:scale-98 hover:bg-emerald-700 cursor-pointer'
-                      } transition-all`}
-                    >
-                      {isDepositing ? (
-                        <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Mengirim...</>
-                      ) : (
-                        <><Check className="w-5 h-5" /> {t('deposit.btn_confirm')}</>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setDepositStep(1)}
-                      className="w-full py-2.5 bg-surface-container text-on-surface-variant font-bold text-xs rounded-xl hover:bg-surface-container-high transition-all cursor-pointer"
-                    >
-                      {t('btn.back')}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 3: Success Screen */}
-              {depositStep === 3 && (
                 <div className="flex flex-col items-center justify-center text-center gap-4 py-4">
                   <div className="w-16 h-16 rounded-full bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-600 animate-bounce">
                     <CheckCircle2 className="w-10 h-10" />

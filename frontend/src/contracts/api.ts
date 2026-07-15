@@ -1,16 +1,20 @@
 import { StoredTemplate } from '@/lib/types';
-import { NETWORK_CONFIG, TOKEN_ADDRESSES, FAUCET_CONFIG, CONTRACT_ADDRESSES } from './config';
+import { NETWORK_CONFIG, TOKEN_ADDRESSES, CONTRACT_ADDRESSES } from './config';
 import {
   isConnected, getAddress, signTransaction,
 } from '@stellar/freighter-api';
 import { Server } from '@stellar/stellar-sdk/rpc';
 import {
-  TransactionBuilder, BASE_FEE, Operation, Asset, Memo, Keypair,
+  TransactionBuilder, BASE_FEE, Operation, Asset, Memo,
 } from '@stellar/stellar-sdk';
 import {
   trCreateTemplate, trUpdateTemplate, trGetTemplate, trGetUserTemplates, trDeactivateTemplate,
-  srSendDirect, srTransfer,
+  srSendDirect, srTransfer, srGetRecipientTransfers, srGetTransfer,
 } from './splitRouter';
+import { USE_REAL_CONTRACT } from './config';
+import {
+  mockGetRecipientTransfers, mockGetTransfer as mockGetTransferDetail,
+} from './mock';
 
 // ═══ Status ═══
 
@@ -119,6 +123,26 @@ export async function transfer(
   const amountNum = parseFloat(amount);
   if (amountNum < 1) throw new Error('Jumlah minimum 1 USDC');
   return await srTransfer(sender, templateId, amountNum);
+}
+
+// ═══ Recipient View ═══
+
+export async function getRecipientTransfers(recipient: string): Promise<string[]> {
+  try {
+    if (USE_REAL_CONTRACT) return await srGetRecipientTransfers(recipient);
+    return await mockGetRecipientTransfers(recipient);
+  } catch {
+    return [];
+  }
+}
+
+export async function getTransferDetail(transferId: string): Promise<any | null> {
+  try {
+    if (USE_REAL_CONTRACT) return await srGetTransfer(transferId);
+    return await mockGetTransferDetail(transferId);
+  } catch {
+    return null;
+  }
 }
 
 // ═══ Wallet Integration ═══
@@ -240,28 +264,16 @@ export async function ensureTrustline(publicKey: string): Promise<{ success: boo
 
 export async function faucetDeposit(destinationAddress: string, amount: number): Promise<TransactionResult> {
   try {
-    if (!FAUCET_CONFIG.secretKey) return { success: false, error: 'Faucet not configured' };
-    if (amount <= 0 || amount > 100000) return { success: false, error: 'Amount must be 1-100,000 USDC' };
-    const faucetKp = Keypair.fromSecret(FAUCET_CONFIG.secretKey);
-    const server = getRpcServer();
-    const sourceAccount = await server.getAccount(FAUCET_CONFIG.publicKey);
-    const tx = new TransactionBuilder(sourceAccount, {
-      fee: BASE_FEE,
-      networkPassphrase: NETWORK_CONFIG.networkPassphrase,
-    })
-      .addOperation(Operation.payment({
-        destination: destinationAddress,
-        asset: new Asset('USDC', TOKEN_ADDRESSES.usdc),
-        amount: amount.toString(),
-      }))
-      .addMemo(Memo.text('Lefta Deposit Faucet'))
-      .setTimeout(300)
-      .build();
-    tx.sign(faucetKp);
-    const result = await server.sendTransaction(tx);
-    if (result.status === 'ERROR') return { success: false, error: 'Faucet transaction failed' };
-    await server.pollTransaction(result.hash);
-    return { success: true, hash: result.hash };
+    const res = await fetch('/api/faucet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: destinationAddress, amount }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return { success: false, error: data.error || 'Faucet deposit failed' };
+    }
+    return { success: true, hash: data.hash };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Faucet deposit gagal' };
   }
