@@ -3,20 +3,19 @@
 import { useState, useEffect } from 'react';
 
 export function useLocalStorage<T>(key: string, initial: T): [T, (value: T | ((prev: T) => T)) => void] {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === 'undefined') return initial;
-    try {
-      const saved = localStorage.getItem(key);
-      return saved ? JSON.parse(saved) : initial;
-    } catch {
-      return initial;
-    }
-  });
+  const [value, setValue] = useState<T>(initial);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) setValue(JSON.parse(saved));
+    } catch {}
+  }, [key]);
+
+  useEffect(() => {
+    try {
       localStorage.setItem(key, JSON.stringify(value));
-    }
+    } catch {}
   }, [key, value]);
 
   return [value, setValue];

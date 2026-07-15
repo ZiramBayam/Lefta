@@ -38,12 +38,12 @@ export default function Home() {
   const [showReceiptDrawer, setShowReceiptDrawer] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
-  const [stellarAddress, setStellarAddress] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('lefta_stellar_address') || '';
-    }
-    return '';
-  });
+  const [stellarAddress, setStellarAddress] = useState<string>('');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('lefta_stellar_address');
+    if (saved) setStellarAddress(saved);
+  }, []);
 
   useEffect(() => {
     if (wallet.publicKey) {
