@@ -16,6 +16,9 @@ target/
 .env
 .env.local
 
+# Deployed contract addresses
+contracts/deployed.json
+
 # Docs dan spec files
 *.md
 docs/
