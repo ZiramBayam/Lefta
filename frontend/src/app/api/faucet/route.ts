@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Server } from '@stellar/stellar-sdk/rpc';
 import {
-  TransactionBuilder, BASE_FEE, Operation, Asset, Memo, Keypair,
+  TransactionBuilder, BASE_FEE, Operation, Asset, Memo, Keypair, Account,
 } from '@stellar/stellar-sdk';
 
 const FAUCET_SECRET_KEY = process.env.FAUCET_SECRET_KEY || '';
 
-function getRpcUrl(): string {
-  return process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+function getHorizonUrl(): string {
+  return process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 }
 
 function getNetworkPassphrase(): string {
@@ -37,9 +36,15 @@ export async function POST(request: NextRequest) {
     }
 
     const faucetKp = Keypair.fromSecret(FAUCET_SECRET_KEY);
-    const server = new Server(getRpcUrl());
-    const sourceAccount = await server.getAccount(faucetKp.publicKey());
+    const horizonUrl = getHorizonUrl();
 
+    const accountRes = await fetch(`${horizonUrl}/accounts/${faucetKp.publicKey()}`);
+    if (!accountRes.ok) {
+      return NextResponse.json({ success: false, error: 'Faucet account not found on network' }, { status: 500 });
+    }
+    const accountData = await accountRes.json();
+
+    const sourceAccount = new Account(faucetKp.publicKey(), accountData.sequence);
     const tx = new TransactionBuilder(sourceAccount, {
       fee: BASE_FEE,
       networkPassphrase: getNetworkPassphrase(),
@@ -55,18 +60,30 @@ export async function POST(request: NextRequest) {
 
     tx.sign(faucetKp);
 
-    const result = await server.sendTransaction(tx);
+    const txBlob = tx.toEnvelope().toXDR('base64');
+    const formData = new URLSearchParams();
+    formData.append('tx', txBlob);
 
-    if (result.status === 'ERROR') {
-      const errorDetail = (result as any).error?.message
-        || (result as any).error
-        || JSON.stringify(result);
-      return NextResponse.json({ success: false, error: `Faucet transaction failed: ${errorDetail}` }, { status: 500 });
+    const submitRes = await fetch(`${horizonUrl}/transactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString(),
+    });
+
+    const submitData = await submitRes.json();
+
+    if (!submitRes.ok) {
+      const errorDetail = submitData?.extras?.result_codes?.transaction
+        || submitData?.title
+        || JSON.stringify(submitData);
+      return NextResponse.json({ success: false, error: `Transaction failed: ${errorDetail}` }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, hash: result.hash });
+    return NextResponse.json({ success: true, hash: submitData.hash });
   } catch (err: any) {
-    const message = err?.message || 'Faucet deposit failed';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({
+      success: false,
+      error: err?.message || 'Faucet deposit failed',
+    }, { status: 500 });
   }
 }
