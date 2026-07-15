@@ -12,6 +12,7 @@ target/
 # Env
 .env
 .env.local
+frontend/.env.local
 
 # Deployed contract addresses
 contracts/deployed.json

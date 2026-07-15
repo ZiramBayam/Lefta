@@ -29,8 +29,4 @@ export const TOKEN_ADDRESSES = {
   usdcContract: process.env.NEXT_PUBLIC_USDC_CONTRACT || '',
 };
 
-// Faucet account (testnet only)
-export const FAUCET_CONFIG = {
-  secretKey: process.env.NEXT_PUBLIC_FAUCET_SECRET_KEY || '',
-  publicKey: process.env.NEXT_PUBLIC_FAUCET_PUBLIC_KEY || '',
-};
+
