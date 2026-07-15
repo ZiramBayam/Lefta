@@ -64,13 +64,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: `Faucet transaction failed: ${errorDetail}` }, { status: 500 });
     }
 
-    let txHash = result.hash;
-    try {
-      await server.pollTransaction(txHash, { timeout: 30000 });
-    } catch {
-    }
-
-    return NextResponse.json({ success: true, hash: txHash });
+    return NextResponse.json({ success: true, hash: result.hash });
   } catch (err: any) {
     const message = err?.message || 'Faucet deposit failed';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
