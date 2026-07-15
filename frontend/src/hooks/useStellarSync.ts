@@ -35,21 +35,13 @@ export function useStellarSync(stellarAddress: string) {
 
         let xlmBalance = 0;
         let usdcBalance = 0;
-        const preferredIssuer = process.env.NEXT_PUBLIC_USDC_ISSUER || '';
 
         for (const item of apiBalances) {
           if (item.asset_type === 'native') {
             xlmBalance = parseFloat(item.balance);
           } else if (item.asset_code === 'USDC') {
-            const bal = parseFloat(item.balance);
-            // Jika ada preferred issuer, prioritaskan issuer tersebut
-            // Jika tidak ada atau issuer cocok, ambil yang balancenya terbesar
-            if (preferredIssuer && item.asset_issuer === preferredIssuer) {
-              usdcBalance = bal;
-              break; // sudah ketemu issuer yang tepat, stop
-            } else if (bal > usdcBalance) {
-              usdcBalance = bal; // fallback: ambil balance terbesar
-            }
+            // Jumlahkan semua trustline USDC (bisa ada lebih dari 1 issuer)
+            usdcBalance += parseFloat(item.balance);
           }
         }
 
