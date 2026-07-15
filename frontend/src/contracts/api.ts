@@ -247,8 +247,19 @@ async function getFaucetIssuer(): Promise<string | null> {
 
 export async function ensureTrustline(publicKey: string): Promise<{ success: boolean; error?: string; alreadyHad: boolean }> {
   try {
-    const faucetIssuer = await getFaucetIssuer();
-    if (!faucetIssuer) return { success: false, alreadyHad: false, error: 'Faucet tidak tersedia.' };
+    // Prioritaskan env variable yang sudah tersedia di client
+    // Fallback ke /api/faucet hanya jika env tidak diset
+    let faucetIssuer = process.env.NEXT_PUBLIC_USDC_ISSUER || '';
+    if (!faucetIssuer) {
+      const fetched = await getFaucetIssuer();
+      if (!fetched) return { success: false, alreadyHad: false, error: 'USDC issuer tidak ditemukan. Pastikan env NEXT_PUBLIC_USDC_ISSUER sudah diset.' };
+      faucetIssuer = fetched;
+    }
+
+    // Validasi format issuer sebelum dipakai
+    if (!faucetIssuer.startsWith('G') || faucetIssuer.length < 50) {
+      return { success: false, alreadyHad: false, error: `Issuer tidak valid: ${faucetIssuer}` };
+    }
 
     const resp = await fetch(`${NETWORK_CONFIG.horizonUrl}/accounts/${publicKey}`);
     if (!resp.ok) return { success: false, alreadyHad: false, error: 'Account tidak ditemukan di Stellar network.' };
@@ -275,6 +286,7 @@ export async function ensureTrustline(publicKey: string): Promise<{ success: boo
     return { success: false, alreadyHad: false, error: err instanceof Error ? err.message : 'Gagal setup trustline' };
   }
 }
+
 
 export async function faucetDeposit(destinationAddress: string, amount: number): Promise<TransactionResult> {
   try {
