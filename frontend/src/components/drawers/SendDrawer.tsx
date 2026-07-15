@@ -110,6 +110,25 @@ export function SendDrawer({
   const { t, language } = useLanguage();
   const { USDC_TO_IDR } = useExchangeRates();
   const sendAsset = 'USDC' as const;
+  const [showShareModal, setShowShareModal] = React.useState(false);
+
+  // Bangun teks pesan WA
+  const buildWhatsAppText = () => {
+    const recipientName = selectedContact ? selectedContact.name : 'keluarga';
+    const amountIDR = (parseFloat(sendAmount) * USDC_TO_IDR).toLocaleString('id-ID');
+    let msg = `✅ *Kiriman Uang via Lefta*\n\nHalo ${recipientName}! Saya baru saja kirim *${sendAmount} USDC* (≈ Rp ${amountIDR}) langsung ke wallet Stellar-mu.`;
+    if (isSplitActive) {
+      msg += `\n\n📊 *Rincian Alokasi:*`;
+      splitAllocations.filter(a => a.percentage > 0).forEach(alloc => {
+        const itemAmt = (parseFloat(sendAmount) * alloc.percentage) / 100;
+        const itemIdr = (itemAmt * USDC_TO_IDR).toLocaleString('id-ID');
+        msg += `\n• ${alloc.category}: ${alloc.percentage}% (${itemAmt.toFixed(2)} USDC / Rp ${itemIdr})`;
+      });
+    }
+    if (sendNotes) msg += `\n\n💬 Pesan: "${sendNotes}"`;
+    msg += `\n\n_Dikirim via Lefta — Web3 Remittance untuk keluarga Indonesia 🇮🇩_`;
+    return msg;
+  };
 
   return (
     <AnimatePresence>
@@ -762,17 +781,77 @@ export function SendDrawer({
                         )}
                       </div>
 
-                      {/* Share prove */}
+                      {/* Share WA button */}
                       <button 
-                        onClick={() => {
-                          const shareText = `Halo! Saya baru saja mengirim uang langsung ke wallet Stellar-mu senilai ${sendAmount} USDC (setara Rp ${(parseFloat(sendAmount) * USDC_TO_IDR).toLocaleString('id-ID')}).`;
-                          alert(`Kirim Bukti via WhatsApp:\n\n"${shareText}"`);
-                        }}
+                        onClick={() => setShowShareModal(true)}
                         className="text-xs font-bold text-primary flex items-center gap-1.5 hover:underline mt-1 justify-center mx-auto cursor-pointer"
                       >
                         <span>Bagikan detail transaksi via WhatsApp</span>
                         <Share2 className="w-3.5 h-3.5" />
                       </button>
+
+                      {/* Share WA Modal */}
+                      <AnimatePresence>
+                        {showShareModal && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/60 z-[60] flex items-end sm:items-center justify-center p-4 backdrop-blur-xs"
+                            onClick={() => setShowShareModal(false)}
+                          >
+                            <motion.div
+                              initial={{ y: 40, opacity: 0 }}
+                              animate={{ y: 0, opacity: 1 }}
+                              exit={{ y: 40, opacity: 0 }}
+                              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                              onClick={e => e.stopPropagation()}
+                              className="bg-surface w-full max-w-sm rounded-3xl overflow-hidden border border-outline-variant/30 shadow-2xl"
+                            >
+                              {/* Modal Header */}
+                              <div className="flex justify-between items-center px-5 py-4 border-b border-outline-variant/10 bg-[#25D366]/10">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xl">💬</span>
+                                  <span className="font-bold text-sm text-on-surface">Bagikan via WhatsApp</span>
+                                </div>
+                                <button onClick={() => setShowShareModal(false)} className="p-1 rounded-full hover:bg-surface-container cursor-pointer">
+                                  <X className="w-4 h-4 text-on-surface" />
+                                </button>
+                              </div>
+
+                              {/* Preview Pesan */}
+                              <div className="p-5 flex flex-col gap-4">
+                                <div>
+                                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Preview Pesan:</span>
+                                  <div className="mt-2 bg-[#DCF8C6] rounded-2xl rounded-tl-none p-4 text-xs text-gray-800 leading-relaxed whitespace-pre-line font-medium shadow-xs border border-[#b7e4a0]/50">
+                                    {buildWhatsAppText()}
+                                  </div>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex flex-col gap-2">
+                                  <a
+                                    href={`https://wa.me/?text=${encodeURIComponent(buildWhatsAppText())}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setShowShareModal(false)}
+                                    className="w-full py-3.5 bg-[#25D366] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-98 transition-all cursor-pointer"
+                                  >
+                                    <Share2 className="w-4 h-4" />
+                                    Buka WhatsApp & Kirim
+                                  </a>
+                                  <button
+                                    onClick={() => setShowShareModal(false)}
+                                    className="w-full py-3 bg-surface-container text-on-surface font-semibold rounded-xl text-xs hover:bg-surface-container-high transition-all cursor-pointer"
+                                  >
+                                    Tutup
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
 
                       <button 
                         onClick={resetSendForm}

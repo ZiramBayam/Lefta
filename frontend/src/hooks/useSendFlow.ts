@@ -102,6 +102,21 @@ export function useSendFlow({ balances, rates, stellarAddress, setTransactions }
 
       setSendTxHash(txHash);
 
+      // Build splits data for transaction history
+      const txSplits = isSplitActive
+        ? splitAllocations
+            .filter(a => a.percentage > 0)
+            .map(alloc => {
+              const itemAmount = (numAmount * alloc.percentage) / 100;
+              return {
+                category: alloc.category,
+                percentage: alloc.percentage,
+                amount: itemAmount,
+                amountIdr: itemAmount * rates.USDC_TO_IDR,
+              };
+            })
+        : undefined;
+
       setTransactions(prev => [{
         id: `TX-${Math.floor(1000 + Math.random() * 9000)}`,
         type: 'sent',
@@ -114,6 +129,7 @@ export function useSendFlow({ balances, rates, stellarAddress, setTransactions }
         status: 'Success',
         notes,
         txHash,
+        splits: txSplits,
       }, ...prev]);
 
       setSendStep(5);
