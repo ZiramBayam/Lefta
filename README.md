@@ -14,8 +14,9 @@
 
 Indonesian migrant workers (TKIs) send remittances home, but the money rarely reaches its intended use — education fees get spent on daily needs, business capital gets mixed with household money.
 
-**Lefta (RemitSplit)** lets TKIs send USDC from abroad with pre-agreed budget splits baked into the transaction itself. Funds are automatically distributed on-chain to separate recipient wallets for Household, Education, Business, Renovation, or any custom category.
+**Lefta** lets TKIs send USDC from abroad with pre-agreed budget splits baked into the transaction itself. Funds are automatically distributed on-chain to separate recipient wallets for Household, Education, Business, Renovation, or any custom category.
 
+LINK: lefta-stellar.vercel.app
 Built for the **APAC Stellar Hackathon 2026**.
 
 ---
