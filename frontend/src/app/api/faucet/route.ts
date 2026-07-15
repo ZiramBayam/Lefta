@@ -15,10 +15,6 @@ function getNetworkPassphrase(): string {
     : 'Test SDF Network ; September 2015';
 }
 
-function getUsdcIssuer(): string {
-  return process.env.NEXT_PUBLIC_USDC_ISSUER || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
-}
-
 export async function POST(request: NextRequest) {
   try {
     if (!FAUCET_SECRET_KEY) {
@@ -44,6 +40,14 @@ export async function POST(request: NextRequest) {
     }
     const accountData = await accountRes.json();
 
+    const usdcBalance = (accountData.balances || []).find(
+      (b: any) => b.asset_code === 'USDC',
+    );
+    if (!usdcBalance) {
+      return NextResponse.json({ success: false, error: 'Faucet has no USDC balance' }, { status: 500 });
+    }
+    const usdcIssuer = usdcBalance.asset_issuer;
+
     const sourceAccount = new Account(faucetKp.publicKey(), accountData.sequence);
     const tx = new TransactionBuilder(sourceAccount, {
       fee: BASE_FEE,
@@ -51,7 +55,7 @@ export async function POST(request: NextRequest) {
     })
       .addOperation(Operation.payment({
         destination: address,
-        asset: new Asset('USDC', getUsdcIssuer()),
+        asset: new Asset('USDC', usdcIssuer),
         amount: amount.toString(),
       }))
       .addMemo(Memo.text('Lefta Deposit Faucet'))
