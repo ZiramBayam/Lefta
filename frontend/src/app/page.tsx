@@ -77,7 +77,14 @@ export default function Home() {
   } = useStellarSync(stellarAddress);
 
   const sendFlow = useSendFlow({ balances, rates, stellarAddress, setTransactions });
-  const depositFlow = useDepositFlow({ stellarAddress, rates, setTransactions });
+  const depositFlow = useDepositFlow({
+    stellarAddress, rates, setTransactions,
+    onDepositSuccess: () => {
+      syncStellarBalances(stellarAddress, (update) => {
+        setBalances(prev => ({ ...prev, ...update }));
+      });
+    },
+  });
   const { contacts } = useContacts();
   const {
     budgetTemplates, setBudgetTemplates,

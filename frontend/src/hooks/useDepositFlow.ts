@@ -8,9 +8,10 @@ interface UseDepositFlowParams {
   stellarAddress: string;
   rates: { USDC_TO_IDR: number };
   setTransactions: (updater: (prev: Transaction[]) => Transaction[]) => void;
+  onDepositSuccess?: () => void;
 }
 
-export function useDepositFlow({ stellarAddress, rates, setTransactions }: UseDepositFlowParams) {
+export function useDepositFlow({ stellarAddress, rates, setTransactions, onDepositSuccess }: UseDepositFlowParams) {
   const [depositAmount, setDepositAmount] = useState('');
   const [depositStep, setDepositStep] = useState<1 | 2>(1);
   const [depositError, setDepositError] = useState('');
@@ -59,6 +60,7 @@ export function useDepositFlow({ stellarAddress, rates, setTransactions }: UseDe
       setTransactions(prev => [newTx, ...prev]);
       setDepositTxHash(result.hash);
       setDepositStep(2);
+      onDepositSuccess?.();
     } else {
       setDepositError(result.error || 'Deposit gagal. Coba lagi.');
     }
@@ -104,6 +106,7 @@ export function useDepositFlow({ stellarAddress, rates, setTransactions }: UseDe
       setTransactions(prev => [newTx, ...prev]);
       setDepositTxHash(result.hash);
       setDepositStep(2);
+      onDepositSuccess?.();
     } else {
       setDepositError(result.error || 'Deposit gagal. Coba lagi.');
     }
