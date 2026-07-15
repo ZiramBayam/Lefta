@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Globe, Check, Copy, RefreshCw } from 'lucide-react';
+import { useWallet } from '@/context/WalletContext';
 import { useLanguage, useExchangeRates } from '@/context/AppContext';
 
 interface SidebarWidgetProps {
@@ -19,6 +20,7 @@ export function SidebarWidget({
 }: SidebarWidgetProps) {
   const { t } = useLanguage();
   const { USDC_TO_IDR, XLM_TO_IDR, lastUpdated, isLoading, refetch } = useExchangeRates();
+  const { network } = useWallet();
 
   return (
     <div id="desktop-sidebar-widget" className="hidden lg:block lg:col-span-4 w-full sticky top-24 space-y-4">
@@ -55,7 +57,7 @@ export function SidebarWidget({
           <div className="flex justify-between items-center bg-surface-container-low p-2.5 rounded-lg border border-outline-variant/5">
             <span className="font-semibold text-on-surface-variant">Jaringan</span>
             <span className="font-bold text-emerald-600 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Stellar Mainnet
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Stellar {network === 'TESTNET' ? 'Testnet' : 'Mainnet'}
             </span>
           </div>
         </div>
