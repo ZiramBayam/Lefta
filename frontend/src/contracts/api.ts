@@ -234,12 +234,26 @@ export async function getWalletBalances(publicKey: string): Promise<{ XLM: numbe
 
 // ═══ Faucet Deposit ═══
 
+async function getFaucetIssuer(): Promise<string | null> {
+  try {
+    const res = await fetch('/api/faucet');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.issuer || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function ensureTrustline(publicKey: string): Promise<{ success: boolean; error?: string; alreadyHad: boolean }> {
   try {
+    const faucetIssuer = await getFaucetIssuer();
+    if (!faucetIssuer) return { success: false, alreadyHad: false, error: 'Faucet tidak tersedia.' };
+
     const resp = await fetch(`${NETWORK_CONFIG.horizonUrl}/accounts/${publicKey}`);
     if (!resp.ok) return { success: false, alreadyHad: false, error: 'Account tidak ditemukan di Stellar network.' };
     const data = await resp.json();
-    const hasTrustline = (data.balances || []).some((b: any) => b.asset_code === 'USDC' && b.asset_issuer === TOKEN_ADDRESSES.usdc);
+    const hasTrustline = (data.balances || []).some((b: any) => b.asset_code === 'USDC' && b.asset_issuer === faucetIssuer);
     if (hasTrustline) return { success: true, alreadyHad: true };
     const server = getRpcServer();
     const sourceAccount = await server.getAccount(publicKey);
@@ -247,7 +261,7 @@ export async function ensureTrustline(publicKey: string): Promise<{ success: boo
       fee: BASE_FEE,
       networkPassphrase: NETWORK_CONFIG.networkPassphrase,
     })
-      .addOperation(Operation.changeTrust({ asset: new Asset('USDC', TOKEN_ADDRESSES.usdc) }))
+      .addOperation(Operation.changeTrust({ asset: new Asset('USDC', faucetIssuer) }))
       .setTimeout(300)
       .build();
     const signResult = await signTransaction(tx.toXDR(), { networkPassphrase: NETWORK_CONFIG.networkPassphrase });

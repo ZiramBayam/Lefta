@@ -4,6 +4,8 @@ import {
 } from '@stellar/stellar-sdk';
 
 const FAUCET_SECRET_KEY = process.env.FAUCET_SECRET_KEY || '';
+// Issuer harus sama dengan NEXT_PUBLIC_USDC_ISSUER yang dipakai di seluruh app
+const USDC_ISSUER = process.env.NEXT_PUBLIC_USDC_ISSUER || '';
 
 function getHorizonUrl(): string {
   return process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
@@ -13,6 +15,45 @@ function getNetworkPassphrase(): string {
   return process.env.NEXT_PUBLIC_NETWORK === 'mainnet'
     ? 'Public Global Stellar Network ; September 2015'
     : 'Test SDF Network ; September 2015';
+}
+
+async function getFaucetAccount() {
+  const horizonUrl = getHorizonUrl();
+  const faucetKp = Keypair.fromSecret(FAUCET_SECRET_KEY);
+  const res = await fetch(`${horizonUrl}/accounts/${faucetKp.publicKey()}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+function getUsdcIssuer(accountData: any): string | null {
+  // Prioritaskan env variable untuk konsistensi issuer di seluruh app.
+  // Fallback ke issuer dari balance faucet jika env tidak diset.
+  if (USDC_ISSUER) return USDC_ISSUER;
+  const balance = (accountData.balances || []).find((b: any) => b.asset_code === 'USDC');
+  return balance?.asset_issuer || null;
+}
+
+export async function GET() {
+  try {
+    if (!FAUCET_SECRET_KEY) {
+      return NextResponse.json({ error: 'Faucet not configured' }, { status: 500 });
+    }
+    // Jika USDC_ISSUER sudah diset via env, tidak perlu fetch account
+    if (USDC_ISSUER) {
+      return NextResponse.json({ issuer: USDC_ISSUER });
+    }
+    const accountData = await getFaucetAccount();
+    if (!accountData) {
+      return NextResponse.json({ error: 'Faucet account not found' }, { status: 500 });
+    }
+    const issuer = getUsdcIssuer(accountData);
+    if (!issuer) {
+      return NextResponse.json({ error: 'Faucet has no USDC balance' }, { status: 500 });
+    }
+    return NextResponse.json({ issuer });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || 'Failed' }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -34,19 +75,15 @@ export async function POST(request: NextRequest) {
     const faucetKp = Keypair.fromSecret(FAUCET_SECRET_KEY);
     const horizonUrl = getHorizonUrl();
 
-    const accountRes = await fetch(`${horizonUrl}/accounts/${faucetKp.publicKey()}`);
-    if (!accountRes.ok) {
+    const accountData = await getFaucetAccount();
+    if (!accountData) {
       return NextResponse.json({ success: false, error: 'Faucet account not found on network' }, { status: 500 });
     }
-    const accountData = await accountRes.json();
 
-    const usdcBalance = (accountData.balances || []).find(
-      (b: any) => b.asset_code === 'USDC',
-    );
-    if (!usdcBalance) {
+    const usdcIssuer = getUsdcIssuer(accountData);
+    if (!usdcIssuer) {
       return NextResponse.json({ success: false, error: 'Faucet has no USDC balance' }, { status: 500 });
     }
-    const usdcIssuer = usdcBalance.asset_issuer;
 
     const sourceAccount = new Account(faucetKp.publicKey(), accountData.sequence);
     const tx = new TransactionBuilder(sourceAccount, {
