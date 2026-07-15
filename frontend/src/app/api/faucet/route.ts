@@ -5,7 +5,6 @@ import {
 } from '@stellar/stellar-sdk';
 
 const FAUCET_SECRET_KEY = process.env.FAUCET_SECRET_KEY || '';
-const FAUCET_PUBLIC_KEY = process.env.FAUCET_PUBLIC_KEY || '';
 
 function getRpcUrl(): string {
   return process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
@@ -39,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     const faucetKp = Keypair.fromSecret(FAUCET_SECRET_KEY);
     const server = new Server(getRpcUrl());
-    const sourceAccount = await server.getAccount(FAUCET_PUBLIC_KEY);
+    const sourceAccount = await server.getAccount(faucetKp.publicKey());
 
     const tx = new TransactionBuilder(sourceAccount, {
       fee: BASE_FEE,
@@ -57,16 +56,23 @@ export async function POST(request: NextRequest) {
     tx.sign(faucetKp);
 
     const result = await server.sendTransaction(tx);
+
     if (result.status === 'ERROR') {
-      return NextResponse.json({ success: false, error: 'Faucet transaction failed' }, { status: 500 });
+      const errorDetail = (result as any).error?.message
+        || (result as any).error
+        || JSON.stringify(result);
+      return NextResponse.json({ success: false, error: `Faucet transaction failed: ${errorDetail}` }, { status: 500 });
     }
 
-    await server.pollTransaction(result.hash);
-    return NextResponse.json({ success: true, hash: result.hash });
-  } catch (err) {
-    return NextResponse.json({
-      success: false,
-      error: err instanceof Error ? err.message : 'Faucet deposit failed',
-    }, { status: 500 });
+    let txHash = result.hash;
+    try {
+      await server.pollTransaction(txHash, { timeout: 30000 });
+    } catch {
+    }
+
+    return NextResponse.json({ success: true, hash: txHash });
+  } catch (err: any) {
+    const message = err?.message || 'Faucet deposit failed';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
