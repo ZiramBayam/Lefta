@@ -1,6 +1,3 @@
-# Reference repos — bahan belajar, bukan bagian dari submission
-reference/
-
 # Rust/WebAssembly
 target/
 *.wasm
@@ -18,10 +15,6 @@ target/
 
 # Deployed contract addresses
 contracts/deployed.json
-
-# Docs dan spec files
-*.md
-docs/
 
 # Agent specs
 .claude/
