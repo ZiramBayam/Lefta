@@ -73,9 +73,10 @@ export async function POST(request: NextRequest) {
     const submitData = await submitRes.json();
 
     if (!submitRes.ok) {
-      const errorDetail = submitData?.extras?.result_codes?.transaction
-        || submitData?.title
-        || JSON.stringify(submitData);
+      const codes = submitData?.extras?.result_codes;
+      const errorDetail = codes?.transaction === 'tx_failed' && codes?.operations
+        ? `op_failed: ${codes.operations.join(', ')}`
+        : codes?.transaction || submitData?.title || JSON.stringify(submitData);
       return NextResponse.json({ success: false, error: `Transaction failed: ${errorDetail}` }, { status: 500 });
     }
 
