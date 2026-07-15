@@ -318,7 +318,7 @@ export default function Home() {
         executeDeposit={depositFlow.executeDeposit}
         confirmDepositPayment={depositFlow.confirmDepositPayment}
         handleInstantDeposit1000={depositFlow.handleInstantDeposit1000}
-        resetDepositForm={depositFlow.resetDepositForm}
+        resetDepositForm={() => { depositFlow.resetDepositForm(); setShowDepositDrawer(false); }}
         isDepositing={depositFlow.isDepositing}
         depositTxHash={depositFlow.depositTxHash}
       />
