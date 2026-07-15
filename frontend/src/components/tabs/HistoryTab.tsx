@@ -12,6 +12,7 @@ interface HistoryTabProps {
   setTxFilter: (filter: 'all' | 'sent' | 'received') => void;
   setSelectedTx: (tx: Transaction) => void;
   contacts: Contact[];
+  isFetchingHistory?: boolean;
 }
 
 export function HistoryTab({
@@ -19,7 +20,8 @@ export function HistoryTab({
   txFilter,
   setTxFilter,
   setSelectedTx,
-  contacts
+  contacts,
+  isFetchingHistory = false,
 }: HistoryTabProps) {
   const { t, language } = useLanguage();
 
@@ -57,7 +59,26 @@ export function HistoryTab({
 
       {/* transactions list */}
       <div className="flex flex-col gap-3">
-        {filteredTransactions.length === 0 ? (
+        {isFetchingHistory ? (
+          // Skeleton loading
+          <div className="flex flex-col gap-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-white border border-outline-variant/20 rounded-xl p-4 flex items-center justify-between gap-3 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-surface-container" />
+                  <div className="flex flex-col gap-2">
+                    <div className="h-3 w-32 bg-surface-container rounded" />
+                    <div className="h-2 w-20 bg-surface-container rounded" />
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="h-3 w-16 bg-surface-container rounded" />
+                  <div className="h-2 w-12 bg-surface-container rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredTransactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant gap-2 bg-surface-container-low rounded-2xl border border-dashed border-outline-variant/30">
             <HistoryIcon className="w-10 h-10 stroke-1 text-outline" />
             <p className="text-sm font-semibold">{t('history.empty_title')}</p>

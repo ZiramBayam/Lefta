@@ -25,6 +25,7 @@ import { useSendFlow } from '@/hooks/useSendFlow';
 import { useDepositFlow } from '@/hooks/useDepositFlow';
 import { useContacts } from '@/hooks/useContacts';
 import { useBudgetTemplates } from '@/hooks/useBudgetTemplates';
+import { useHorizonHistory } from '@/hooks/useHorizonHistory';
 
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
@@ -65,9 +66,18 @@ export default function Home() {
   });
 
   const [transactions, setTransactions] = useLocalStorage<Transaction[]>('lefta_transactions', []);
+  const [onChainTxs, setOnChainTxs] = useState<Transaction[]>([]);
   const [txFilter, setTxFilter] = useState<'all' | 'sent' | 'received'>('all');
 
-  const filteredTransactions = transactions.filter(tx => {
+  // Gabung transaksi on-chain + transaksi lokal (baru dibuat dari app)
+  // On-chain jadi sumber kebenaran; transaksi lokal baru muncul di atas
+  const allTransactions = React.useMemo(() => {
+    const onChainIds = new Set(onChainTxs.map(t => t.txHash));
+    const localOnly = transactions.filter(t => !onChainIds.has(t.txHash));
+    return [...localOnly, ...onChainTxs];
+  }, [onChainTxs, transactions]);
+
+  const filteredTransactions = allTransactions.filter(tx => {
     if (txFilter === 'all') return true;
     return tx.type === txFilter;
   });
@@ -75,6 +85,8 @@ export default function Home() {
   const {
     isSyncing, syncStatus, detectedNetwork, syncStellarBalances,
   } = useStellarSync(stellarAddress);
+
+  const { isFetchingHistory, fetchHorizonHistory } = useHorizonHistory();
 
   const sendFlow = useSendFlow({ balances, rates, stellarAddress, setTransactions });
   const depositFlow = useDepositFlow({
@@ -130,11 +142,18 @@ export default function Home() {
     syncStellarBalances(stellarAddress, (update) => {
       setBalances(prev => ({ ...prev, ...update }));
     });
+    fetchHorizonHistory(stellarAddress, rates.USDC_TO_IDR).then(txs => {
+      if (txs.length > 0) setOnChainTxs(txs);
+    });
   };
 
   useEffect(() => {
     syncStellarBalances(stellarAddress, (update) => {
       setBalances(prev => ({ ...prev, ...update }));
+    });
+    // Fetch on-chain history saat address berubah
+    fetchHorizonHistory(stellarAddress, rates.USDC_TO_IDR).then(txs => {
+      if (txs.length > 0) setOnChainTxs(txs);
     });
   }, [stellarAddress]);
 
@@ -269,6 +288,7 @@ export default function Home() {
                     setTxFilter={setTxFilter}
                     setSelectedTx={setSelectedTx}
                     contacts={contacts}
+                    isFetchingHistory={isFetchingHistory}
                   />
                 )}
               </AnimatePresence>
