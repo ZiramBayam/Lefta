@@ -3,9 +3,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Send, X, Search, ChevronRight, XCircle, Info, Wallet, Receipt, 
+  Send, X, Search, ChevronRight, XCircle, Info, Wallet,
   Layers, Sparkles, Home as HomeIcon, Briefcase, Hammer, GraduationCap, 
-  HeartPulse, CheckCircle2, Lock, Key, Share2 
+  HeartPulse, CheckCircle2, Key, Share2 
 } from 'lucide-react';
 import { Contact, WalletBalances } from '@/lib/types';
 import { useLanguage, useExchangeRates } from '@/context/AppContext';
@@ -38,8 +38,6 @@ interface SendDrawerProps {
   handleNextToAmount: () => void;
   amountError: string;
   setAmountError: (error: string) => void;
-  sendMethod: 'direct' | 'ticket';
-  setSendMethod: (method: 'direct' | 'ticket') => void;
   balances: WalletBalances;
   sendAmount: string;
   setSendAmount: (amount: string) => void;
@@ -59,13 +57,10 @@ interface SendDrawerProps {
   setNewTemplateName: (name: string) => void;
   templateSaveSuccess: string;
   setTemplateSaveSuccess: (success: string) => void;
-  sendPin: string;
-  setSendPin: (pin: string) => void;
   handleNextToConfirm: () => void;
   executeSendTransaction: () => void;
   isSending: boolean;
   stellarAddress: string;
-  generatedClaimCode: string;
   copiedHash: string | null;
   handleCopyHash: (hash: string) => void;
 }
@@ -86,8 +81,6 @@ export function SendDrawer({
   handleNextToAmount,
   amountError,
   setAmountError,
-  sendMethod,
-  setSendMethod,
   balances,
   sendAmount,
   setSendAmount,
@@ -107,13 +100,10 @@ export function SendDrawer({
   setNewTemplateName,
   templateSaveSuccess,
   setTemplateSaveSuccess,
-  sendPin,
-  setSendPin,
   handleNextToConfirm,
   executeSendTransaction,
   isSending,
   stellarAddress,
-  generatedClaimCode,
   copiedHash,
   handleCopyHash
 }: SendDrawerProps) {
@@ -263,44 +253,6 @@ export function SendDrawer({
                     <div className="bg-emerald-50 border border-emerald-100 p-3.5 rounded-xl flex items-center gap-2.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                       <span className="text-sm font-bold text-emerald-800">USDC (Stellar Dollar)</span>
-                    </div>
-                  </div>
-
-                  {/* Send Method Selector */}
-                  <div className="flex flex-col gap-1.5 text-left">
-                    <label className="text-xs font-semibold text-on-surface-variant">Metode Pengiriman</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSendMethod('direct')}
-                        className={`p-3 rounded-xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
-                          sendMethod === 'direct'
-                            ? 'bg-primary-container/20 border-primary'
-                            : 'bg-white border-outline-variant/30 hover:bg-surface-container-low'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <Wallet className="w-3.5 h-3.5 text-primary" />
-                          <span className="text-xs font-bold text-on-surface">Kirim Langsung</span>
-                        </div>
-                        <span className="text-[10px] text-on-surface-variant leading-tight">Dana masuk instan langsung ke alamat Stellar Wallet penerima.</span>
-                      </button>
-                      
-                      <button
-                        type="button"
-                        onClick={() => setSendMethod('ticket')}
-                        className={`p-3 rounded-xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
-                          sendMethod === 'ticket'
-                            ? 'bg-primary-container/20 border-primary'
-                            : 'bg-white border-outline-variant/30 hover:bg-surface-container-low'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <Receipt className="w-3.5 h-3.5 text-secondary" />
-                          <span className="text-xs font-bold text-on-surface">Tiket Klaim</span>
-                        </div>
-                        <span className="text-[10px] text-on-surface-variant leading-tight">Dana terkunci aman. Sistem membuat Kode Tiket untuk dicairkan penerima.</span>
-                      </button>
                     </div>
                   </div>
 
@@ -587,29 +539,6 @@ export function SendDrawer({
                     )}
                   </div>
 
-                  {/* Secure Claim PIN input for Option 1 */}
-                  {sendMethod === 'ticket' && (
-                    <div className="flex flex-col gap-2 bg-amber-500/5 border border-amber-500/25 p-3.5 rounded-xl text-left">
-                      <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                        <Lock className="w-3.5 h-3.5 text-amber-600" /> Buat PIN Pengaman Tiket (4 Angka)
-                      </label>
-                      <p className="text-[10px] text-amber-800 leading-normal">
-                        Masukkan 4 angka rahasia. Beritahu PIN ini ke keluarga agar mereka bisa mencairkan uang secara aman di Indonesia.
-                      </p>
-                      <input
-                        type="text"
-                        maxLength={4}
-                        placeholder="Contoh: 1234 (Dibuat otomatis jika kosong)"
-                        value={sendPin}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '');
-                          setSendPin(val);
-                        }}
-                        className="w-full px-4 py-2.5 bg-white rounded-xl border border-outline-variant/30 focus:border-amber-500 focus:outline-none text-center font-mono font-bold tracking-widest text-base text-on-surface"
-                      />
-                    </div>
-                  )}
-
                   {amountError && (
                     <span className="text-xs text-error font-medium flex items-center gap-1 bg-error-container/20 p-2.5 rounded-lg text-left">
                       <XCircle className="w-4 h-4 text-error" /> {amountError}
@@ -659,7 +588,7 @@ export function SendDrawer({
                       <div className="flex justify-between">
                         <span className="text-on-surface-variant">Metode</span>
                         <span className="font-semibold text-on-surface">
-                          {sendMethod === 'ticket' ? 'Tiket Klaim (Kode Unik)' : 'Kirim Langsung (Wallet)'}
+                          Kirim Langsung
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -721,9 +650,7 @@ export function SendDrawer({
                   <div className="flex gap-2 items-start bg-amber-500/10 p-3 rounded-xl border border-amber-500/25 text-left">
                     <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                     <p className="text-[10px] leading-relaxed text-amber-900">
-                      {sendMethod === 'ticket' 
-                        ? 'Sistem akan mengunci dana di escrow Stellar Blockchain dan mengeluarkan Kode Tiket unik. Bagikan kode ini hanya pada keluarga Anda.'
-                        : 'Transaksi blockchain bersifat permanen dan tidak dapat dibatalkan. Pastikan alamat Stellar penerima sudah benar.'}
+                      Transaksi blockchain bersifat permanen dan tidak dapat dibatalkan. Pastikan alamat Stellar penerima sudah benar.
                     </p>
                   </div>
 
@@ -801,41 +728,6 @@ export function SendDrawer({
                         </div>
                       </div>
 
-                      {/* Ticket Claim Info */}
-                      {sendMethod === 'ticket' && generatedClaimCode && (
-                        <div className="w-full bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 text-left flex flex-col gap-2 mt-1">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black text-amber-900 uppercase">KODE TIKET KLAIM KELUARGA</span>
-                            <button 
-                              onClick={() => handleCopyHash(generatedClaimCode)} 
-                              className="text-[9px] bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer"
-                            >
-                              {copiedHash === generatedClaimCode ? 'Berhasil' : 'Salin'}
-                            </button>
-                          </div>
-                          <div className="font-mono font-black text-sm text-amber-700 bg-white border border-amber-500/20 px-2.5 py-1.5 rounded-lg select-all text-center">
-                            {generatedClaimCode}
-                          </div>
-
-                          <div className="flex justify-between items-center mt-1">
-                            <span className="text-[10px] font-black text-amber-900 uppercase">PIN PENGAMAN TIKET</span>
-                            <button 
-                              onClick={() => handleCopyHash(sendPin)} 
-                              className="text-[9px] bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer"
-                            >
-                              {copiedHash === sendPin ? 'Berhasil' : 'Salin'}
-                            </button>
-                          </div>
-                          <div className="font-mono font-black text-sm text-amber-700 bg-white border border-amber-500/20 px-2.5 py-1.5 rounded-lg select-all text-center">
-                            {sendPin}
-                          </div>
-                          
-                          <p className="text-[9px] text-amber-800 leading-normal text-center mt-1">
-                            Bagikan kode & PIN di atas ke keluarga untuk dicairkan di menu <strong>Cek Penerimaan</strong>.
-                          </p>
-                        </div>
-                      )}
-
                       {/* Splits List */}
                       <div className="w-full bg-white rounded-xl p-4 space-y-4 border border-outline-variant/10 shadow-3xs text-left">
                         {isSplitActive ? (
@@ -873,9 +765,7 @@ export function SendDrawer({
                       {/* Share prove */}
                       <button 
                         onClick={() => {
-                          const shareText = sendMethod === 'ticket' 
-                            ? `Halo! Saya baru saja mengirim uang lewat Lefta. Cairkan langsung dengan memasukkan Kode Tiket: *${generatedClaimCode}* dan PIN Pengaman: *${sendPin}*`
-                            : `Halo! Saya baru saja mengirim uang langsung ke wallet Stellar-mu senilai ${sendAmount} USDC (setara Rp ${(parseFloat(sendAmount) * USDC_TO_IDR).toLocaleString('id-ID')}).`;
+                          const shareText = `Halo! Saya baru saja mengirim uang langsung ke wallet Stellar-mu senilai ${sendAmount} USDC (setara Rp ${(parseFloat(sendAmount) * USDC_TO_IDR).toLocaleString('id-ID')}).`;
                           alert(`Kirim Bukti via WhatsApp:\n\n"${shareText}"`);
                         }}
                         className="text-xs font-bold text-primary flex items-center gap-1.5 hover:underline mt-1 justify-center mx-auto cursor-pointer"

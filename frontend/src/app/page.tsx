@@ -5,7 +5,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Wallet, Home as HomeIcon, Layers, History as HistoryIcon, CheckCircle2, XCircle, LogIn, LogOut } from 'lucide-react';
 
 import { Transaction, WalletBalances, Contact, BudgetSplit } from '@/lib/types';
-import { INITIAL_BALANCES, MOCK_CONTACTS, generateTxHash } from '@/lib/data';
+import { INITIAL_BALANCES, MOCK_CONTACTS } from '@/lib/data';
 import { useLanguage, useExchangeRates } from '@/context/AppContext';
 import { useWallet } from '@/context/WalletContext';
 
@@ -14,7 +14,6 @@ import { SidebarWidget } from '@/components/layout/SidebarWidget';
 import { WalletModal } from '@/components/drawers/WalletModal';
 import { TransactionDetailModal } from '@/components/drawers/TransactionDetailModal';
 import { DepositDrawer } from '@/components/drawers/DepositDrawer';
-import { ReceiptDrawer } from '@/components/drawers/ReceiptDrawer';
 import { SendDrawer } from '@/components/drawers/SendDrawer';
 import { faucetDeposit, ensureTrustline, sendDirect, transfer } from '@/contracts/api';
 
@@ -34,17 +33,6 @@ interface BudgetTemplate {
   allocations: BudgetSplitAlloc[];
 }
 
-interface FoundClaim {
-  id: string;
-  sender: string;
-  amount: number;
-  currency: 'USDC' | 'XLM' | 'IDR';
-  amountIdr: number;
-  code: string;
-  pin?: string;
-  splits?: BudgetSplit[];
-}
-
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
   const rates = useExchangeRates();
@@ -52,7 +40,6 @@ export default function Home() {
 
   const [activeTab, setActiveTab] = useState<'home' | 'templates' | 'history'>('home');
   const [showSendDrawer, setShowSendDrawer] = useState(false);
-  const [showReceiptDrawer, setShowReceiptDrawer] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
@@ -125,20 +112,6 @@ export default function Home() {
     }
   }, [contacts]);
 
-  const [notifications, setNotifications] = useState<Array<{ id: string; sender: string; amount: number; code: string; claimed: boolean; pin?: string; splits?: BudgetSplit[] }>>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('lefta_claims_tickets');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('lefta_claims_tickets', JSON.stringify(notifications));
-    }
-  }, [notifications]);
-
   const [showDepositDrawer, setShowDepositDrawer] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositStep, setDepositStep] = useState<1 | 2 | 3>(1);
@@ -165,9 +138,6 @@ export default function Home() {
   const [sendTxHash, setSendTxHash] = useState('');
   const [addressError, setAddressError] = useState('');
   const [amountError, setAmountError] = useState('');
-  const [sendMethod, setSendMethod] = useState<'direct' | 'ticket'>('direct');
-  const [sendPin, setSendPin] = useState('');
-  const [generatedClaimCode, setGeneratedClaimCode] = useState('');
 
   const [isSplitActive, setIsSplitActive] = useState(false);
   const [splitAllocations, setSplitAllocations] = useState<BudgetSplitAlloc[]>([
@@ -241,14 +211,6 @@ export default function Home() {
   ]);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  const [receiptCode, setReceiptCode] = useState('');
-  const [claimSearchError, setClaimSearchError] = useState('');
-  const [foundClaim, setFoundClaim] = useState<FoundClaim | null>(null);
-  const [claimPinInput, setClaimPinInput] = useState('');
-  const [claimPinError, setClaimPinError] = useState('');
-  const [isClaiming, setIsClaiming] = useState(false);
-  const [claimSuccess, setClaimSuccess] = useState(false);
-
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
@@ -274,7 +236,6 @@ export default function Home() {
       localStorage.removeItem('lefta_balances');
       localStorage.removeItem('lefta_transactions');
       localStorage.removeItem('lefta_contacts');
-      localStorage.removeItem('lefta_claims_tickets');
     }
     // Disconnect wallet if connected
     if (wallet.isConnected) {
@@ -285,7 +246,6 @@ export default function Home() {
     setBalances(INITIAL_BALANCES);
     setTransactions([]);
     setContacts([]);
-    setNotifications([]);
     setShowWalletModal(false);
   };
 
@@ -339,35 +299,8 @@ export default function Home() {
       const idrEquivalent = numAmount * rates.USDC_TO_IDR;
       let txHash = '';
 
-      let claimCode = '';
-      let finalPin: string | undefined;
-      let notes: string;
-
-      if (sendMethod === 'ticket') {
-        claimCode = `LEFTA-ID-${Math.floor(1000 + Math.random() * 9000)}`;
-        setGeneratedClaimCode(claimCode);
-        finalPin = sendPin.trim() || `${Math.floor(1000 + Math.random() * 9000)}`;
-        setSendPin(finalPin);
-
-        txHash = await sendDirect(stellarAddress, destAddr, sendAmount);
-
-        setNotifications(prev => [{
-          id: `notif-${Date.now()}`,
-          sender: 'Saya sendiri (Pengirim)',
-          amount: numAmount,
-          code: claimCode, claimed: false,
-          pin: finalPin,
-          splits: isSplitActive ? splitAllocations.filter(a => a.percentage > 0).map(a => ({
-            category: a.category, percentage: a.percentage,
-            amount: parseFloat(((numAmount * a.percentage) / 100).toFixed(2)),
-            amountIdr: parseFloat(((idrEquivalent * a.percentage) / 100).toFixed(0))
-          })) : undefined,
-        }, ...prev]);
-        notes = 'Buat Tiket Penerimaan';
-      } else {
-        txHash = await sendDirect(stellarAddress, destAddr, sendAmount);
-        notes = `Kirim USDC ke ${selectedContact?.name || 'Alamat Stellar'}`;
-      }
+      txHash = await sendDirect(stellarAddress, destAddr, sendAmount);
+      const notes = `Kirim USDC ke ${selectedContact?.name || 'Alamat Stellar'}`;
 
       setSendTxHash(txHash);
 
@@ -377,13 +310,12 @@ export default function Home() {
         amount: numAmount,
         currency: 'USDC',
         amountIdr: idrEquivalent,
-        destinationAddress: destAddr || 'KLAIM_TIKET',
+        destinationAddress: destAddr,
         sourceAddress: stellarAddress,
         timestamp: new Date().toISOString(),
         status: 'Success',
         notes,
         txHash,
-        claimCode,
       }, ...prev]);
 
       setSendStep(5);
@@ -401,9 +333,6 @@ export default function Home() {
     setCustomAddress('');
     setSendAmount('');
     setSendNotes('');
-    setSendMethod('direct');
-    setSendPin('');
-    setGeneratedClaimCode('');
     setIsSplitActive(false);
     setSplitPreset('household');
     setSplitAllocations([
@@ -414,94 +343,6 @@ export default function Home() {
       { category: 'Dana Darurat & Kesehatan', percentage: 10 },
     ]);
     setShowSendDrawer(false);
-  };
-
-  const handleSearchClaimCode = () => {
-    const cleanCode = receiptCode.trim().toUpperCase();
-    if (!cleanCode) {
-      setClaimSearchError('Masukkan kode penerimaan terlebih dahulu');
-      return;
-    }
-
-    setClaimPinInput('');
-    setClaimPinError('');
-
-    const matchedNotif = notifications.find(n => n.code.toUpperCase() === cleanCode && !n.claimed);
-    
-    if (matchedNotif) {
-      const idrVal = matchedNotif.amount * rates.USDC_TO_IDR;
-      setFoundClaim({
-        id: matchedNotif.id,
-        sender: matchedNotif.sender,
-        amount: matchedNotif.amount,
-        currency: 'USDC',
-        amountIdr: idrVal,
-        code: matchedNotif.code,
-        pin: matchedNotif.pin,
-        splits: matchedNotif.splits,
-      });
-      setClaimSearchError('');
-    } else {
-      setClaimSearchError('Kode tidak ditemukan atau sudah diklaim.');
-      setFoundClaim(null);
-    }
-  };
-
-  const executeClaim = () => {
-    if (!foundClaim) return;
-
-    if (foundClaim.pin) {
-      if (!claimPinInput) {
-        setClaimPinError('Harap masukkan PIN Pengaman dari Pengirim');
-        return;
-      }
-      if (claimPinInput.trim() !== foundClaim.pin.trim()) {
-        setClaimPinError('PIN Pengaman salah!');
-        return;
-      }
-    }
-
-    setClaimPinError('');
-    setIsClaiming(true);
-
-    setTimeout(() => {
-      setBalances(prev => ({
-        ...prev,
-        IDR: prev.IDR + foundClaim.amountIdr
-      }));
-
-      setNotifications(prev => prev.map(n => n.id === foundClaim.id ? { ...n, claimed: true } : n));
-
-      const newTx: Transaction = {
-        id: `TX-${Math.floor(1000 + Math.random() * 9000)}`,
-        type: 'received',
-        amount: foundClaim.amount,
-        currency: foundClaim.currency,
-        amountIdr: foundClaim.amountIdr,
-        destinationAddress: 'GDXKYR76X2OHO556LIVPCEKCV6S3XQLF3W6Y4S4YCOTX3J2A',
-        sourceAddress: `CLAIM_SENDER_${foundClaim.sender.replace(/\s+/g, '_').toUpperCase()}`,
-        timestamp: new Date().toISOString(),
-        status: 'Success',
-        notes: `Cairkan Kiriman dari ${foundClaim.sender}`,
-        txHash: generateTxHash(),
-        claimCode: foundClaim.code
-      };
-
-      setTransactions(prev => [newTx, ...prev]);
-      setIsClaiming(false);
-      setClaimSuccess(true);
-    }, 2000);
-  };
-
-  const resetClaimForm = () => {
-    setReceiptCode('');
-    setFoundClaim(null);
-    setClaimPinInput('');
-    setClaimPinError('');
-    setClaimSearchError('');
-    setClaimSuccess(false);
-    setIsClaiming(false);
-    setShowReceiptDrawer(false);
   };
 
   const syncStellarBalances = async (addressToSync = stellarAddress) => {
@@ -844,9 +685,6 @@ export default function Home() {
                     syncStellarBalances={syncStellarBalances}
                     setSendStep={setSendStep}
                     setShowSendDrawer={setShowSendDrawer}
-                    setFoundClaim={setFoundClaim}
-                    setReceiptCode={setReceiptCode}
-                    setShowReceiptDrawer={setShowReceiptDrawer}
                     setDepositStep={setDepositStep}
                     setDepositAmount={setDepositAmount}
                     setDepositError={setDepositError}
@@ -948,25 +786,6 @@ export default function Home() {
         depositTxHash={depositTxHash}
       />
 
-      <ReceiptDrawer
-        showReceiptDrawer={showReceiptDrawer}
-        resetClaimForm={resetClaimForm}
-        foundClaim={foundClaim}
-        setFoundClaim={setFoundClaim}
-        claimSuccess={claimSuccess}
-        receiptCode={receiptCode}
-        setReceiptCode={setReceiptCode}
-        claimSearchError={claimSearchError}
-        setClaimSearchError={setClaimSearchError}
-        handleSearchClaimCode={handleSearchClaimCode}
-        claimPinInput={claimPinInput}
-        setClaimPinInput={setClaimPinInput}
-        claimPinError={claimPinError}
-        setClaimPinError={setClaimPinError}
-        isClaiming={isClaiming}
-        executeClaim={executeClaim}
-      />
-
       <SendDrawer
         showSendDrawer={showSendDrawer}
         resetSendForm={resetSendForm}
@@ -983,8 +802,6 @@ export default function Home() {
         handleNextToAmount={handleNextToAmount}
         amountError={amountError}
         setAmountError={setAmountError}
-        sendMethod={sendMethod}
-        setSendMethod={setSendMethod}
         balances={balances}
         sendAmount={sendAmount}
         setSendAmount={setSendAmount}
@@ -1004,13 +821,10 @@ export default function Home() {
         setNewTemplateName={setNewTemplateName}
         templateSaveSuccess={templateSaveSuccess}
         setTemplateSaveSuccess={setTemplateSaveSuccess}
-        sendPin={sendPin}
-        setSendPin={setSendPin}
         handleNextToConfirm={handleNextToConfirm}
         executeSendTransaction={executeSendTransaction}
         isSending={isSending}
         stellarAddress={stellarAddress}
-        generatedClaimCode={generatedClaimCode}
         copiedHash={copiedHash}
         handleCopyHash={handleCopyHash}
       />

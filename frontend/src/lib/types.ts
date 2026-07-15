@@ -56,7 +56,7 @@ export interface WalletBalances {
 // Legacy type - kept for reference
 export interface LegacyTransaction {
   id: string;
-  type: 'sent' | 'received' | 'pending_claim';
+  type: 'sent' | 'received';
   amount: number;
   currency: string;
   amountIdr: number;
@@ -64,7 +64,6 @@ export interface LegacyTransaction {
   sourceAddress: string;
   timestamp: string;
   status: 'Pending' | 'Success' | 'Failed';
-  claimCode?: string;
   notes?: string;
   txHash: string;
   splits?: Array<{ category: string; amount: number; percentage: number; amountIdr: number }>;

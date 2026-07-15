@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw, TrendingUp, ArrowUpRight, Receipt, Coins, Info } from 'lucide-react';
+import { RefreshCw, TrendingUp, ArrowUpRight, Coins, Info } from 'lucide-react';
 import { WalletBalances } from '@/lib/types';
 import { useLanguage, useExchangeRates } from '@/context/AppContext';
 
@@ -14,9 +14,6 @@ interface HomeTabProps {
   syncStellarBalances: () => void;
   setSendStep: (step: number) => void;
   setShowSendDrawer: (show: boolean) => void;
-  setFoundClaim: (claim: any) => void;
-  setReceiptCode: (code: string) => void;
-  setShowReceiptDrawer: (show: boolean) => void;
   setDepositStep: (step: 1 | 2 | 3) => void;
   setDepositAmount: (amount: string) => void;
   setDepositError: (error: string) => void;
@@ -31,9 +28,6 @@ export function HomeTab({
   syncStellarBalances,
   setSendStep,
   setShowSendDrawer,
-  setFoundClaim,
-  setReceiptCode,
-  setShowReceiptDrawer,
   setDepositStep,
   setDepositAmount,
   setDepositError,
@@ -99,7 +93,7 @@ export function HomeTab({
       </div>
 
       {/* Main Action Buttons Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Send Button ("Kirim") */}
         <button
           onClick={() => {
@@ -113,22 +107,6 @@ export function HomeTab({
             <ArrowUpRight className="w-7 h-7 text-on-primary-container" />
           </div>
           <span className="font-bold text-base">{t('home.btn_send')}</span>
-        </button>
-
-        {/* Check Receipts Button ("Cek Penerimaan") */}
-        <button
-          onClick={() => {
-            setFoundClaim(null);
-            setReceiptCode('');
-            setShowReceiptDrawer(true);
-          }}
-          className="w-full h-[145px] bg-surface-container text-on-surface rounded-2xl flex flex-col items-center justify-center gap-3 hover:bg-surface-container-high active:scale-95 transition-all duration-200 shadow-sm group relative overflow-hidden border border-outline-variant/20 cursor-pointer"
-        >
-          <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <div className="w-14 h-14 rounded-full bg-white/70 flex items-center justify-center group-hover:-translate-y-1 transition-transform duration-300">
-            <Receipt className="w-7 h-7 text-secondary" />
-          </div>
-          <span className="font-bold text-base">{t('home.btn_check')}</span>
         </button>
 
         {/* Deposit Button ("Isi Saldo") */}
