@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Contact, Transaction, WalletBalances } from '@/lib/types';
-import { sendDirect } from '@/contracts/api';
+import { sendPayment } from '@/contracts/api';
 
 export interface BudgetSplitAlloc {
   category: string;
@@ -88,7 +88,16 @@ export function useSendFlow({ balances, rates, stellarAddress, setTransactions }
       const destAddr = selectedContact ? selectedContact.address : customAddress;
       const idrEquivalent = numAmount * rates.USDC_TO_IDR;
 
-      const txHash = await sendDirect(stellarAddress, destAddr, sendAmount);
+      const txResult = await sendPayment({
+        destination: destAddr,
+        amount: sendAmount,
+        asset: 'USDC',
+        memo: sendNotes || undefined,
+      });
+      if (!txResult.success || !txResult.hash) {
+        throw new Error(txResult.error || 'Gagal mengirim transaksi');
+      }
+      const txHash = txResult.hash;
       const notes = `Kirim USDC ke ${selectedContact?.name || 'Alamat Stellar'}`;
 
       setSendTxHash(txHash);
