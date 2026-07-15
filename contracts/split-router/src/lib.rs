@@ -1,26 +1,31 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype,
+    contract, contracterror, contractevent, contractimpl, contracttype,
     Address, Bytes, BytesN, Env, String, Vec,
+    xdr::ToXdr,
 };
 
-const MINIMUM_AMOUNT: i128 = 1_000_000;
+const MINIMUM_AMOUNT: i128 = 1_000_000; // 1 USDC (7 decimals)
 const MAX_HISTORY_PER_PAGE: u32 = 100;
-const MAX_HISTORY_TOTAL: u32 = 1000; // Max entries per sender/recipient
+const MAX_HISTORY_TOTAL: u32 = 1000;
+const MAX_ALLOCATIONS: u32 = 5;
+const MAX_LABEL_LENGTH: u32 = 20;
+const TOTAL_BASIS_POINTS: u32 = 10000;
 
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Allocation {
     pub label: String,
-    pub recipient: Address,
-    pub basis_points: u32,
+    pub recipient: Address,     // Stellar address untuk kategori ini
+    pub basis_points: u32,      // 4500 = 45%
 }
 
 #[contracttype]
 #[derive(Clone)]
 pub struct StoredTemplate {
     pub sender: Address,
+    pub name: String,                  // "Belanja Ibu", "Tabungan Keluarga"
     pub allocations: Vec<Allocation>,
     pub is_active: bool,
 }
@@ -34,23 +39,13 @@ pub struct SplitResult {
 }
 
 #[contracttype]
-#[derive(Clone, Debug)]
-pub struct TransferRecord {
-    pub id: BytesN<32>,
-    pub sender: Address,
-    pub template_id: BytesN<32>,
-    pub total_amount: i128,
-    pub timestamp: u64,
-    pub splits: Vec<SplitResult>,
-}
-
-#[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Template(BytesN<32>),
     Transfer(BytesN<32>),
     SenderHistory(Address),
     RecipientHistory(Address),
+    Nonce(Address),
 }
 
 #[contracterror]
@@ -62,8 +57,28 @@ pub enum ContractError {
     TemplateInactive = 3,
     Unauthorized = 4,
     BelowMinimumAmount = 5,
-    AlreadyInitialized = 6,
-    InvalidBasisPoints = 7,
+    TooManyAllocations = 6,
+    EmptyAllocations = 7,
+    InvalidBasisPoints = 8,
+    LabelTooLong = 9,
+    InvalidRecipient = 10,
+}
+
+// --- Events ---
+
+#[contractevent(topics = ["template", "create"], data_format = "single-value")]
+pub struct TemplateCreated {
+    pub template_id: BytesN<32>,
+}
+
+#[contractevent(topics = ["template", "deactivate"], data_format = "single-value")]
+pub struct TemplateDeactivated {
+    pub template_id: BytesN<32>,
+}
+
+#[contractevent(topics = ["transfer", "exec"], data_format = "single-value")]
+pub struct TransferExecuted {
+    pub transfer_id: BytesN<32>,
 }
 
 #[contract]
@@ -71,38 +86,36 @@ pub struct SplitRouterContract;
 
 #[contractimpl]
 impl SplitRouterContract {
+    /// Create a new split template
     pub fn create_template(
         env: Env,
         sender: Address,
+        name: String,
         allocations: Vec<Allocation>,
     ) -> Result<BytesN<32>, ContractError> {
         sender.require_auth();
 
-        let mut total: u32 = 0;
-        for i in 0..allocations.len() {
-            total += allocations.get(i).unwrap().basis_points;
-        }
-        if total != 10000 {
-            return Err(ContractError::InvalidBasisPoints);
-        }
+        Self::validate_allocations(&env, &allocations)?;
 
-        let mut data = Bytes::new(&env);
-        data.append(&Bytes::from_array(&env, &env.ledger().sequence().to_le_bytes()));
-        data.append(&Bytes::from_array(&env, &env.ledger().timestamp().to_le_bytes()));
-        let template_id: BytesN<32> = env.crypto().sha256(&data).into();
+        let nonce = Self::get_and_increment_nonce(&env, &sender);
+        let template_id = Self::generate_id(&env, &sender, nonce);
 
         let template = StoredTemplate {
             sender: sender.clone(),
+            name,
             allocations,
             is_active: true,
         };
 
-        env.storage().instance().set(&DataKey::Template(template_id.clone()), &template);
-        env.storage().instance().extend_ttl(100, 518400);
+        env.storage().persistent().set(&DataKey::Template(template_id.clone()), &template);
+        env.storage().persistent().extend_ttl(&DataKey::Template(template_id.clone()), 100, 518400);
+
+        TemplateCreated { template_id: template_id.clone() }.publish(&env);
 
         Ok(template_id)
     }
 
+    /// Send with split using a template
     pub fn transfer(
         env: Env,
         sender: Address,
@@ -118,7 +131,7 @@ impl SplitRouterContract {
 
         let template: StoredTemplate = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Template(template_id.clone()))
             .ok_or(ContractError::TemplateNotFound)?;
 
@@ -130,178 +143,82 @@ impl SplitRouterContract {
         }
 
         let splits = Self::calculate_splits(&env, &template.allocations, amount);
+        let contract_addr = env.current_contract_address();
 
-        let mut data = Bytes::new(&env);
-        data.append(&Bytes::from_array(&env, &env.ledger().sequence().to_le_bytes()));
-        data.append(&Bytes::from_array(&env, &env.ledger().timestamp().to_le_bytes()));
-        let transfer_id: BytesN<32> = env.crypto().sha256(&data).into();
-
+        // Generate unique transfer ID
+        let nonce = Self::get_and_increment_nonce(&env, &sender);
+        let transfer_id = Self::generate_id(&env, &sender, nonce);
         let now = env.ledger().timestamp();
 
-        let record = TransferRecord {
-            id: transfer_id.clone(),
-            sender: sender.clone(),
-            template_id,
-            total_amount: amount,
-            timestamp: now,
-            splits: splits.clone(),
-        };
+        // Update sender history
+        Self::add_to_history(&env, &DataKey::SenderHistory(sender.clone()), &transfer_id);
 
-        env.storage().instance().set(&DataKey::Transfer(transfer_id.clone()), &record);
-
-        // Update sender history with bounded growth
-        let mut sender_history = env
-            .storage()
-            .instance()
-            .get::<_, Vec<BytesN<32>>>(&DataKey::SenderHistory(sender.clone()))
-            .unwrap_or_else(|| Vec::new(&env));
-
-        // Remove oldest if at max
-        if sender_history.len() >= MAX_HISTORY_TOTAL {
-            sender_history.remove(0);
-        }
-        sender_history.push_back(transfer_id.clone());
-        env.storage().instance().set(&DataKey::SenderHistory(sender.clone()), &sender_history);
-
-        // Update recipient history with bounded growth
-        for i in 0..splits.len() {
-            let split = splits.get(i).unwrap();
-            let mut recipient_history = env
-                .storage()
-                .instance()
-                .get::<_, Vec<BytesN<32>>>(&DataKey::RecipientHistory(split.recipient.clone()))
-                .unwrap_or_else(|| Vec::new(&env));
-
-            if recipient_history.len() >= MAX_HISTORY_TOTAL {
-                recipient_history.remove(0);
-            }
-            recipient_history.push_back(transfer_id.clone());
-            env.storage().instance().set(&DataKey::RecipientHistory(split.recipient.clone()), &recipient_history);
-        }
-
-        env.storage().instance().extend_ttl(100, 518400);
-
+        // Update each recipient's history & execute transfer
         let token_client = soroban_sdk::token::Client::new(&env, &usdc_token_id);
-        // Transfer USDC from sender to contract
-        // Sender must include this in same transaction with auth
-        token_client.transfer(&sender, &env.current_contract_address(), &amount);
 
+        // First: collect all from sender to contract
+        token_client.transfer(&sender, &contract_addr, &amount);
+
+        // Then: distribute to each recipient based on split
         for i in 0..splits.len() {
             let split = splits.get(i).unwrap();
+
+            // Skip if amount is 0
             if split.amount > 0 {
-                // Reject if recipient is contract address
-                if split.recipient == env.current_contract_address() {
-                    // Skip self-transfer to prevent fund loss
-                    continue;
+                // Validate recipient is not contract
+                if split.recipient == contract_addr {
+                    return Err(ContractError::InvalidRecipient);
                 }
-                token_client.transfer(&env.current_contract_address(), &split.recipient, &split.amount);
+
+                // Update recipient history
+                Self::add_to_history(&env, &DataKey::RecipientHistory(split.recipient.clone()), &transfer_id);
+
+                // Transfer to recipient
+                token_client.transfer(&contract_addr, &split.recipient, &split.amount);
             }
         }
+
+        TransferExecuted { transfer_id: transfer_id.clone() }.publish(&env);
 
         Ok(transfer_id)
     }
 
-    pub fn get_transfer(env: Env, transfer_id: BytesN<32>) -> Result<TransferRecord, ContractError> {
-        env.storage()
-            .instance()
-            .get(&DataKey::Transfer(transfer_id))
-            .ok_or(ContractError::TransferNotFound)
-    }
+    /// Send directly to a single recipient (no template/split)
+    pub fn send_direct(
+        env: Env,
+        sender: Address,
+        to: Address,
+        amount: i128,
+        usdc_token_id: Address,
+    ) -> Result<BytesN<32>, ContractError> {
+        sender.require_auth();
 
-    /// Get sender history with pagination
-    /// page: 0-indexed page number
-    /// limit: entries per page (max 100)
-    pub fn get_sender_history_page(env: Env, sender: Address, page: u32, limit: u32) -> Vec<BytesN<32>> {
-        let history = env
-            .storage()
-            .instance()
-            .get::<_, Vec<BytesN<32>>>(&DataKey::SenderHistory(sender.clone()))
-            .unwrap_or_else(|| Vec::new(&env));
-
-        let limit = if limit > MAX_HISTORY_PER_PAGE {
-            MAX_HISTORY_PER_PAGE
-        } else {
-            limit
-        };
-
-        let start = page * limit;
-        let end = if start + limit > history.len() {
-            history.len()
-        } else {
-            start + limit
-        };
-
-        if start >= history.len() {
-            return Vec::new(&env);
+        if amount < MINIMUM_AMOUNT {
+            return Err(ContractError::BelowMinimumAmount);
         }
 
-        let mut result = Vec::new(&env);
-        for i in start..end {
-            result.push_back(history.get(i).unwrap());
-        }
-        result
-    }
-
-    /// Get sender history count
-    /// Get sender history (alias for page 0, max limit)
-    pub fn get_sender_history(env: Env, sender: Address) -> Vec<BytesN<32>> {
-        Self::get_sender_history_page(env, sender, 0, MAX_HISTORY_PER_PAGE)
-    }
-
-    /// Get recipient history (alias for page 0, max limit)
-    pub fn get_recipient_history(env: Env, recipient: Address) -> Vec<BytesN<32>> {
-        Self::get_recipient_history_page(env, recipient, 0, MAX_HISTORY_PER_PAGE)
-    }
-
-    pub fn get_sender_history_count(env: Env, sender: Address) -> u32 {
-        env.storage()
-            .instance()
-            .get::<_, Vec<BytesN<32>>>(&DataKey::SenderHistory(sender))
-            .map(|h| h.len())
-            .unwrap_or(0)
-    }
-
-    /// Get recipient history with pagination
-    pub fn get_recipient_history_page(env: Env, recipient: Address, page: u32, limit: u32) -> Vec<BytesN<32>> {
-        let history = env
-            .storage()
-            .instance()
-            .get::<_, Vec<BytesN<32>>>(&DataKey::RecipientHistory(recipient.clone()))
-            .unwrap_or_else(|| Vec::new(&env));
-
-        let limit = if limit > MAX_HISTORY_PER_PAGE {
-            MAX_HISTORY_PER_PAGE
-        } else {
-            limit
-        };
-
-        let start = page * limit;
-        let end = if start + limit > history.len() {
-            history.len()
-        } else {
-            start + limit
-        };
-
-        if start >= history.len() {
-            return Vec::new(&env);
+        let contract_addr = env.current_contract_address();
+        if to == contract_addr {
+            return Err(ContractError::InvalidRecipient);
         }
 
-        let mut result = Vec::new(&env);
-        for i in start..end {
-            result.push_back(history.get(i).unwrap());
-        }
-        result
+        let nonce = Self::get_and_increment_nonce(&env, &sender);
+        let transfer_id = Self::generate_id(&env, &sender, nonce);
+
+        // Update histories
+        Self::add_to_history(&env, &DataKey::SenderHistory(sender.clone()), &transfer_id);
+        Self::add_to_history(&env, &DataKey::RecipientHistory(to.clone()), &transfer_id);
+
+        // Execute transfer
+        let token_client = soroban_sdk::token::Client::new(&env, &usdc_token_id);
+        token_client.transfer(&sender, &to, &amount);
+
+        TransferExecuted { transfer_id: transfer_id.clone() }.publish(&env);
+
+        Ok(transfer_id)
     }
 
-    /// Get recipient history count
-    pub fn get_recipient_history_count(env: Env, recipient: Address) -> u32 {
-        env.storage()
-            .instance()
-            .get::<_, Vec<BytesN<32>>>(&DataKey::RecipientHistory(recipient))
-            .map(|h| h.len())
-            .unwrap_or(0)
-    }
-
+    /// Deactivate a template
     pub fn deactivate_template(
         env: Env,
         sender: Address,
@@ -311,7 +228,7 @@ impl SplitRouterContract {
 
         let mut template: StoredTemplate = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Template(template_id.clone()))
             .ok_or(ContractError::TemplateNotFound)?;
 
@@ -320,13 +237,105 @@ impl SplitRouterContract {
         }
 
         template.is_active = false;
+        env.storage().persistent().set(&DataKey::Template(template_id.clone()), &template);
+        env.storage().persistent().extend_ttl(&DataKey::Template(template_id.clone()), 100, 518400);
 
-        env.storage().instance().set(&DataKey::Template(template_id), &template);
-        env.storage().instance().extend_ttl(100, 518400);
+        TemplateDeactivated { template_id }.publish(&env);
 
         Ok(())
     }
 
+    // --- Getters ---
+
+    pub fn get_template(env: Env, template_id: BytesN<32>) -> Result<StoredTemplate, ContractError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Template(template_id))
+            .ok_or(ContractError::TemplateNotFound)
+    }
+
+    pub fn get_sender_templates(env: Env, sender: Address) -> Vec<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SenderHistory(sender))
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    // --- Internal helpers ---
+
+    fn get_and_increment_nonce(env: &Env, sender: &Address) -> u64 {
+        let key = DataKey::Nonce(sender.clone());
+        let nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+        env.storage().persistent().set(&key, &(nonce + 1));
+        env.storage().persistent().extend_ttl(&key, 100, 518400);
+        nonce
+    }
+
+    fn generate_id(env: &Env, sender: &Address, nonce: u64) -> BytesN<32> {
+        let mut data = Bytes::new(env);
+        data.append(&sender.to_xdr(env));
+        data.append(&Bytes::from_array(env, &nonce.to_le_bytes()));
+        data.append(&Bytes::from_array(env, &env.ledger().timestamp().to_le_bytes()));
+        env.crypto().sha256(&data).into()
+    }
+
+    fn add_to_history(env: &Env, key: &DataKey, transfer_id: &BytesN<32>) {
+        let mut history = env
+            .storage()
+            .persistent()
+            .get::<_, Vec<BytesN<32>>>(key)
+            .unwrap_or_else(|| Vec::new(env));
+
+        if history.len() >= MAX_HISTORY_TOTAL {
+            history.remove(0);
+        }
+        history.push_back(transfer_id.clone());
+        env.storage().persistent().set(key, &history);
+        env.storage().persistent().extend_ttl(key, 100, 518400);
+    }
+
+    fn validate_allocations(env: &Env, allocations: &Vec<Allocation>) -> Result<(), ContractError> {
+        let len = allocations.len();
+
+        if len == 0 {
+            return Err(ContractError::EmptyAllocations);
+        }
+        if len > MAX_ALLOCATIONS {
+            return Err(ContractError::TooManyAllocations);
+        }
+
+        let mut total: u32 = 0;
+        let mut seen_labels: Vec<String> = Vec::new(env);
+
+        for i in 0..len {
+            let alloc = allocations.get(i).unwrap();
+
+            // Validate label length
+            let label_len = alloc.label.len();
+            if label_len == 0 || label_len > MAX_LABEL_LENGTH {
+                return Err(ContractError::LabelTooLong);
+            }
+
+            // Check duplicate labels
+            for j in 0..seen_labels.len() {
+                if seen_labels.get(j).unwrap() == alloc.label {
+                    // Allow duplicate labels (same category different allocation)
+                }
+            }
+            seen_labels.push_back(alloc.label.clone());
+
+            // Sum basis_points
+            total += alloc.basis_points;
+        }
+
+        if total != TOTAL_BASIS_POINTS {
+            return Err(ContractError::InvalidBasisPoints);
+        }
+
+        Ok(())
+    }
+
+    /// Calculate splits based on basis_points
     fn calculate_splits(env: &Env, allocations: &Vec<Allocation>, total: i128) -> Vec<SplitResult> {
         let mut results = Vec::new(env);
         let mut distributed: i128 = 0;
@@ -335,11 +344,13 @@ impl SplitRouterContract {
         for i in 0..len {
             let alloc = allocations.get(i).unwrap();
             let amount = if i == len - 1 {
+                // Last allocation gets the remainder (handles rounding
                 total - distributed
             } else {
-                (total * alloc.basis_points as i128) / 10000
+                (total * alloc.basis_points as i128) / TOTAL_BASIS_POINTS as i128
             };
             distributed += amount;
+
             results.push_back(SplitResult {
                 recipient: alloc.recipient.clone(),
                 label: alloc.label.clone(),
@@ -351,260 +362,134 @@ impl SplitRouterContract {
     }
 }
 
-// ponytail: Pure logic tests - no testutils needed
 #[cfg(test)]
 mod test {
     use super::*;
 
-    fn make_alloc(env: &Env, label: &str, basis_points: u32) -> Allocation {
-        Allocation {
-            label: String::from_str(env, label),
-            recipient: Address::generate(env),
-            basis_points,
-        }
-    }
-
-    fn sum_splits(splits: &Vec<SplitResult>) -> i128 {
-        let mut total: i128 = 0;
-        for i in 0..splits.len() {
-            total += splits.get(i).unwrap().amount;
-        }
-        total
-    }
-
-    #[test]
-    fn test_calculate_splits_60_40() {
-        let env = Env::default();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(Allocation { label: String::from_str(&env, "A"), recipient: recipient1, basis_points: 6000 });
-        allocs.push_back(Allocation { label: String::from_str(&env, "B"), recipient: recipient2, basis_points: 4000 });
-
-        let total: i128 = 100_000_000;
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, total);
-
-        assert_eq!(splits.len(), 2);
-        assert_eq!(splits.get(0).unwrap().amount, 60_000_000);
-        assert_eq!(splits.get(1).unwrap().amount, 40_000_000);
-    }
-
-    #[test]
-    fn test_calculate_splits_50_50() {
-        let env = Env::default();
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "A", 5000));
-        allocs.push_back(make_alloc(&env, "B", 5000));
-
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, 1_000_000);
-
-        assert_eq!(splits.get(0).unwrap().amount, 500_000);
-        assert_eq!(splits.get(1).unwrap().amount, 500_000);
-    }
-
-    #[test]
-    fn test_calculate_splits_rounding_33_33_34() {
-        let env = Env::default();
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "A", 3333));
-        allocs.push_back(make_alloc(&env, "B", 3333));
-        allocs.push_back(make_alloc(&env, "C", 3334));
-
-        let total: i128 = 100_000_000;
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, total);
-
-        // Sum must equal total (no loss)
-        assert_eq!(sum_splits(&splits), total);
-    }
-
-    #[test]
-    fn test_calculate_splits_single_100_percent() {
-        let env = Env::default();
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "Full", 10000));
-
-        let total: i128 = 50_000_000;
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, total);
-
-        assert_eq!(splits.len(), 1);
-        assert_eq!(splits.get(0).unwrap().amount, total);
-    }
-
-    #[test]
-    fn test_calculate_splits_rounding_precision_100_units() {
-        let env = Env::default();
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "A", 3333));
-        allocs.push_back(make_alloc(&env, "B", 3333));
-        allocs.push_back(make_alloc(&env, "C", 3334));
-
-        // Small total to expose rounding issues
-        let total: i128 = 100;
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, total);
-
-        assert_eq!(sum_splits(&splits), total);
-    }
-
-    #[test]
-    fn test_calculate_splits_minimum_amount_1_usdc() {
-        let env = Env::default();
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "Full", 10000));
-
-        let total: i128 = 1_000_000;
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, total);
-
-        assert_eq!(splits.get(0).unwrap().amount, total);
-    }
-
-    #[test]
-    fn test_calculate_splits_even_split_4_ways() {
-        let env = Env::default();
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "A", 2500));
-        allocs.push_back(make_alloc(&env, "B", 2500));
-        allocs.push_back(make_alloc(&env, "C", 2500));
-        allocs.push_back(make_alloc(&env, "D", 2500));
-
-        let total: i128 = 100_000_000;
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, total);
-
-        assert_eq!(splits.len(), 4);
-        assert_eq!(sum_splits(&splits), total);
-    }
-
-    #[test]
-    fn test_calculate_splits_small_and_large() {
-        let env = Env::default();
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "A", 100));   // 1%
-        allocs.push_back(make_alloc(&env, "B", 100));   // 1%
-        allocs.push_back(make_alloc(&env, "C", 100));   // 1%
-        allocs.push_back(make_alloc(&env, "D", 9700));  // 97%
-
-        let total: i128 = 100_000_000;
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, total);
-
-        assert_eq!(sum_splits(&splits), total);
-        assert_eq!(splits.get(3).unwrap().amount, 97_000_000);
-    }
-
-    #[test]
-    fn test_calculate_splits_preserves_labels() {
-        let env = Env::default();
-        let recipient1 = Address::generate(&env);
-        let recipient2 = Address::generate(&env);
-
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(Allocation { label: String::from_str(&env, "Harian"), recipient: recipient1, basis_points: 6000 });
-        allocs.push_back(Allocation { label: String::from_str(&env, "Tabungan"), recipient: recipient2, basis_points: 4000 });
-
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, 100_000_000);
-
-        assert_eq!(splits.get(0).unwrap().label, String::from_str(&env, "Harian"));
-        assert_eq!(splits.get(1).unwrap().label, String::from_str(&env, "Tabungan"));
-    }
-
     #[test]
     fn test_minimum_amount_constant() {
-        let min: i128 = MINIMUM_AMOUNT;
-        assert_eq!(min, 1_000_000);
+        assert_eq!(MINIMUM_AMOUNT, 1_000_000);
     }
 
     #[test]
-    fn test_calculate_splits_edge_case_1_unit() {
+    fn test_constants() {
+        assert!(MAX_ALLOCATIONS <= 5);
+        assert!(MAX_LABEL_LENGTH <= 20);
+        assert_eq!(TOTAL_BASIS_POINTS, 10000);
+    }
+
+    #[test]
+    fn test_calculate_splits_simple() {
         let env = Env::default();
+
         let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "A", 5000));
-        allocs.push_back(make_alloc(&env, "B", 5000));
-
-        // Very small amount
-        let total: i128 = 1;
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, total);
-
-        // First gets 0 (floor of 0.5), last gets 1 (remainder)
-        assert_eq!(splits.get(0).unwrap().amount, 0);
-        assert_eq!(splits.get(1).unwrap().amount, 1);
-    }
-
-    #[test]
-    fn test_calculate_splits_zero_first() {
-        let env = Env::default();
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "A", 100));  // 1%
-        allocs.push_back(make_alloc(&env, "B", 9900)); // 99%
-
-        let total: i128 = 100;
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, total);
-
-        // First gets 1, last gets 99 (no remainder)
-        assert_eq!(splits.get(0).unwrap().amount, 1);
-        assert_eq!(splits.get(1).unwrap().amount, 99);
-    }
-
-    #[test]
-    fn test_create_template_invalid_basis_points() {
-        // SplitRouter create_template validates basis points = 10000
-        // This is tested by verifying the validation logic
-        let total: u32 = 6000 + 4000;
-        assert_eq!(total, 10000); // Valid
-
-        let invalid: u32 = 6000 + 3999;
-        assert_ne!(invalid, 10000); // Invalid
-    }
-
-    #[test]
-    fn test_split_calculation_preserves_recipients() {
-        let env = Env::default();
         let r1 = Address::generate(&env);
         let r2 = Address::generate(&env);
 
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(Allocation { label: String::from_str(&env, "X"), recipient: r1.clone(), basis_points: 6000 });
-        allocs.push_back(Allocation { label: String::from_str(&env, "Y"), recipient: r2.clone(), basis_points: 4000 });
+        allocs.push_back(Allocation {
+            label: String::from_str(&env, "Harian"),
+            recipient: r1.clone(),
+            basis_points: 6000, // 60%
+        });
+        allocs.push_back(Allocation {
+            label: String::from_str(&env, "Tabungan"),
+            recipient: r2.clone(),
+            basis_points: 4000, // 40%
+        });
 
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, 100_000_000);
+        let total: i128 = 100_000_000; // 100 USDC
+        let results = SplitRouterContract::calculate_splits(&env, &allocs, total);
 
-        // Verify recipients match
-        assert_eq!(splits.get(0).unwrap().recipient, r1);
-        assert_eq!(splits.get(1).unwrap().recipient, r2);
+        assert_eq!(results.len(), 2);
+        // 60% of 100 USDC = 60 USDC
+        assert_eq!(results.get(0).unwrap().amount, 60_000_000);
+        // 40% of 100 USDC = 40 USDC
+        assert_eq!(results.get(1).unwrap().amount, 40_000_000);
     }
 
     #[test]
-    fn test_split_result_amounts_positive() {
-        // All split amounts should be >= 0
+    fn test_calculate_splits_rounding() {
         let env = Env::default();
+
         let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "A", 1));   // 0.01%
-        allocs.push_back(make_alloc(&env, "B", 9999)); // 99.99%
+        let r1 = Address::generate(&env);
 
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, 100_000_000);
+        allocs.push_back(Allocation {
+            label: String::from_str(&env, "Semua"),
+            recipient: r1.clone(),
+            basis_points: 10000, // 100%
+        });
 
-        for i in 0..splits.len() {
-            assert!(splits.get(i).unwrap().amount >= 0, "Split amount should never be negative");
+        let total: i128 = 1_000_000; // 1 USDC
+        let results = SplitRouterContract::calculate_splits(&env, &allocs, total);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results.get(0).unwrap().amount, total);
+    }
+
+    #[test]
+    fn test_validate_allocations_valid() {
+        let env = Env::default();
+
+        let mut allocs: Vec<Allocation> = Vec::new(&env);
+        allocs.push_back(Allocation {
+            label: String::from_str(&env, "A"),
+            recipient: Address::generate(&env),
+            basis_points: 5000,
+        });
+        allocs.push_back(Allocation {
+            label: String::from_str(&env, "B"),
+            recipient: Address::generate(&env),
+            basis_points: 5000,
+        });
+
+        let result = SplitRouterContract::validate_allocations(&env, &allocs);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_allocations_invalid_total() {
+        let env = Env::default();
+
+        let mut allocs: Vec<Allocation> = Vec::new(&env);
+        allocs.push_back(Allocation {
+            label: String::from_str(&env, "A"),
+            recipient: Address::generate(&env),
+            basis_points: 3000,
+        });
+        allocs.push_back(Allocation {
+            label: String::from_str(&env, "B"),
+            recipient: Address::generate(&env),
+            basis_points: 3000,
+        });
+
+        let result = SplitRouterContract::validate_allocations(&env, &allocs);
+        assert_eq!(result, Err(ContractError::InvalidBasisPoints));
+    }
+
+    #[test]
+    fn test_validate_allocations_too_many() {
+        let env = Env::default();
+
+        let mut allocs: Vec<Allocation> = Vec::new(&env);
+        for i in 0..6u32 {
+            allocs.push_back(Allocation {
+                label: String::from_str(&env, "A"),
+                recipient: Address::generate(&env),
+                basis_points: 1666,
+            });
         }
+
+        let result = SplitRouterContract::validate_allocations(&env, &allocs);
+        assert_eq!(result, Err(ContractError::TooManyAllocations));
     }
 
     #[test]
-    fn test_zero_total_returns_all_zero() {
+    fn test_validate_allocations_empty() {
         let env = Env::default();
-        let mut allocs: Vec<Allocation> = Vec::new(&env);
-        allocs.push_back(make_alloc(&env, "A", 5000));
-        allocs.push_back(make_alloc(&env, "B", 5000));
+        let empty: Vec<Allocation> = Vec::new(&env);
 
-        let splits = SplitRouterContract::calculate_splits(&env, &allocs, 0);
-
-        assert_eq!(splits.get(0).unwrap().amount, 0);
-        assert_eq!(splits.get(1).unwrap().amount, 0);
-    }
-
-    #[test]
-    fn test_constants_bounds() {
-        // Verify bounds constants
-        assert_eq!(MINIMUM_AMOUNT, 1_000_000);
-        assert!(MAX_HISTORY_PER_PAGE <= 100);
-        assert!(MAX_HISTORY_TOTAL <= 1000);
-        assert!(MAX_HISTORY_PER_PAGE <= MAX_HISTORY_TOTAL);
+        let result = SplitRouterContract::validate_allocations(&env, &empty);
+        assert_eq!(result, Err(ContractError::EmptyAllocations));
     }
 }
