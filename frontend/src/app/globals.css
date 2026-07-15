@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Custom colors from the Lefta Warm Web3 Remittance design spec */
+  --color-primary: #5b6400;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #d1e231;
+  --color-on-primary-container: #5a6300;
+
+  --color-secondary: #5b6400;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #dce87d;
+  --color-on-secondary-container: #5f6805;
+
+  --color-tertiary: #3e6280;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #b7dbff;
+  --color-on-tertiary-container: #3d617f;
+
+  --color-surface: #fcfae8;
+  --color-surface-dim: #dcdbc9;
+  --color-surface-bright: #fcfae8;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f6f4e2;
+  --color-surface-container: #f0efdc;
+  --color-surface-container-high: #eae9d7;
+  --color-surface-container-highest: #e4e3d1;
+  --color-on-surface: #1b1c11;
+  --color-on-surface-variant: #474834;
+  --color-inverse-surface: #303125;
+  --color-inverse-on-surface: #f3f2df;
+
+  --color-outline: #777962;
+  --color-outline-variant: #c8c8ae;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  --color-background: #fcfae8;
+  --color-on-background: #1b1c11;
+
+  --radius-xl: 16px;
+  --radius-lg: 12px;
+}
+
+body {
+  background-color: #f6f4e2;
+  font-family: var(--font-sans);
+  color: var(--color-on-surface);
+}
+
+/* Custom styles for friendly web3 design */
+.custom-shadow {
+  box-shadow: 0px 4px 20px rgba(91, 100, 0, 0.06);
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
