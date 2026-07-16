@@ -31,7 +31,7 @@ jobs:
       - name: Build WASM
         working-directory: contracts
         run: |
-          cargo build --release -p ${{ matrix.contract.name }}
+          cargo build --release --target wasm32v1-none -p ${{ matrix.contract.name }}
 
       - name: Inject SEP-58 metadata
         working-directory: contracts
