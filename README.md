@@ -100,8 +100,6 @@ Executes split transfers atomically. Pulls USDC from sender, calculates per-reci
 | USDC (SAC) | `CAFFIKBNRYES5IMSHYOAHFQHUYFNB6DQYH6WICEGYP6X72LHOAY3SABL` | Built-in (no verification needed) |
 
 **Network:** Stellar Testnet  
-**Deployed:** 2026-07-16 (#7, commit 7d6278f)
-**Build Release:** [v0.1.0](https://github.com/ZiramBayam/Lefta/releases/tag/v0.1.0) with SEP-55 attestation
 
 ---
 
