@@ -4,6 +4,7 @@
 
 [![Stellar](https://img.shields.io/badge/Stellar-Testnet-090909?logo=stellar)](https://stellar.org)
 [![Soroban](https://img.shields.io/badge/Soroban-27.x-7B1FA2)](https://soroban.stellar.org)
+[![SEP-58](https://img.shields.io/badge/SEP--58%20Verified-Contract-7B1FA2)](https://stellar-contract-verification.vercel.app)
 [![Next.js](https://img.shields.io/badge/Next.js-15.3-000000?logo=next.js)](https://nextjs.org)
 [![Rust](https://img.shields.io/badge/Rust-1.91-DEA584?logo=rust)](https://rust-lang.org)
 [![MIT license](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
@@ -92,14 +93,33 @@ Executes split transfers atomically. Pulls USDC from sender, calculates per-reci
 
 ## Deployed Contracts (Stellar Testnet)
 
-| Contract | Address |
-|----------|---------|
-| TemplateRegistry | `CDCWHFVVHHF6Y72OEWH7OTQX7YUYJR2LB627J6VW25UJWZQOCUCYKPCA` |
-| SplitRouter | `CCZBJ2YE747TCUJ5D3UXLPA2HL4RPA5FIHDHXJKF4BSMXRKP5WQXXTYX` |
-| USDC (SAC) | `CAFFIKBNRYES5IMSHYOAHFQHUYFNB6DQYH6WICEGYP6X72LHOAY3SABL` |
+| Contract | Address | Status |
+|----------|---------|--------|
+| TemplateRegistry | `CAN6AQO3CVWGDFNHCM4ML53RQM2EW65NB7IPLD4KYZ5HPSVFQKL4LHNZ` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
+| SplitRouter | `CDLDOKQ4FAQY4P7AIRVTIRSVKIZVLRKJYDN7ELCV6YWOXSQ4DP2Z65TM` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
+| USDC (SAC) | `CAFFIKBNRYES5IMSHYOAHFQHUYFNB6DQYH6WICEGYP6X72LHOAY3SABL` | Built-in (no verification needed) |
 
 **Network:** Stellar Testnet  
-**Deployed:** 2026-07-15
+**Deployed:** 2026-07-16
+
+---
+
+### Contract Verification
+
+Both contracts include [SEP-58](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0058.md) metadata (embedded in the WASM `contractmetav0` custom section), enabling trustless source-code verification.
+
+```bash
+# Verify via CSV Verify
+curl -X POST https://stellar-contract-verification.vercel.app/api/verify \
+  -H "Content-Type: application/json" \
+  -d '{"contract_id": "CAN6AQO3CVWGDFNHCM4ML53RQM2EW65NB7IPLD4KYZ5HPSVFQKL4LHNZ"}'
+
+curl -X POST https://stellar-contract-verification.vercel.app/api/verify \
+  -H "Content-Type: application/json" \
+  -d '{"contract_id": "CDLDOKQ4FAQY4P7AIRVTIRSVKIZVLRKJYDN7ELCV6YWOXSQ4DP2Z65TM"}'
+```
+
+Or paste the contract IDs at [stellar-contract-verification.vercel.app](https://stellar-contract-verification.vercel.app/verify).
 
 ---
 
@@ -140,11 +160,12 @@ cd contracts
 # Run tests
 cargo test
 
-# Build WASM
-cargo build --target wasm32-unknown-unknown --release
-
-# Deploy to testnet (automated)
+# Build WASM + embed SEP-58 metadata
 ./deploy.sh
+
+# Or manually:
+cargo build --target wasm32v1-none --release
+# (metadata is embedded automatically by deploy.sh)
 ```
 
 ---
@@ -187,7 +208,7 @@ Lefta/
 │   ├── Cargo.toml                     # Workspace config
 │   ├── rust-toolchain.toml            # Rust toolchain pinning
 │   ├── deployed.json                  # Deployed contract addresses
-│   └── deploy.sh                      # Build + deploy script
+│   └── deploy.sh                      # Build + SEP-58 embed + deploy script
 ├── frontend/
 │   ├── src/
 │   │   ├── app/                       # Next.js App Router pages + layout
