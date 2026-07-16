@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build, Release, and Verify
 on:
   push:
     tags:
@@ -10,22 +10,72 @@ permissions:
   attestations: write
 
 jobs:
-  release-template-registry:
-    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
-    with:
-      release_name: template-registry-${{ github.ref_name }}
-      release_description: 'TemplateRegistry contract'
-      relative_path: 'contracts/template-registry'
-      package: 'template-registry'
-    secrets:
-      release_token: ${{ secrets.GITHUB_TOKEN }}
+  build:
+    strategy:
+      matrix:
+        contract:
+          - name: template-registry
+            wasm: template_registry
+          - name: split-router
+            wasm: split_router
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  release-split-router:
-    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
-    with:
-      release_name: split-router-${{ github.ref_name }}
-      release_description: 'SplitRouter contract'
-      relative_path: 'contracts/split-router'
-      package: 'split-router'
-    secrets:
-      release_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Rust 1.91.0
+        run: |
+          rustup set profile minimal
+          rustup toolchain install 1.91.0 --target wasm32v1-none
+          rustup default 1.91.0
+
+      - name: Build WASM
+        working-directory: contracts
+        run: |
+          cargo build --release -p ${{ matrix.contract.name }}
+
+      - name: Inject SEP-58 metadata
+        working-directory: contracts
+        run: |
+          python3 inject_sep58.py \
+            "target/wasm32v1-none/release/${{ matrix.contract.wasm }}.wasm" \
+            "${{ github.server_url }}/${{ github.repository }}" \
+            "${{ github.sha }}"
+
+      - name: Compute WASM hash
+        id: hash
+        working-directory: contracts
+        run: |
+          echo "hash=$(sha256sum target/wasm32v1-none/release/${{ matrix.contract.wasm }}.wasm | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: contracts
+        run: |
+          gh release create "${{ matrix.contract.name }}-${{ github.ref_name }}" \
+            "target/wasm32v1-none/release/${{ matrix.contract.wasm }}.wasm" \
+            --title "${{ matrix.contract.name }} ${{ github.ref_name }}" \
+            --notes "Build from commit ${{ github.sha }}" \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: 'contracts/target/wasm32v1-none/release/${{ matrix.contract.wasm }}.wasm'
+          subject-name: '${{ matrix.contract.wasm }}.wasm'
+
+      - name: Notify Stellar Expert
+        run: |
+          curl -s -X POST "https://api.stellar.expert/explorer/public/contract-validation/match" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "repository": "${{ github.server_url }}/${{ github.repository }}",
+              "commitHash": "${{ github.sha }}",
+              "jobId": "${{ github.job }}",
+              "runId": "${{ github.run_id }}",
+              "contractHash": "${{ steps.hash.outputs.hash }}",
+              "relativePath": "contracts/${{ matrix.contract.name }}",
+              "packageName": "${{ matrix.contract.name }}"
+            }' \
+            --max-time 15 || echo "Stellar Expert notification sent (or failed silently)"
