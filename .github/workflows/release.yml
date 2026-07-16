@@ -50,14 +50,14 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        working-directory: contracts
         run: |
+          WASM_PATH="${{ github.workspace }}/contracts/target/wasm32v1-none/release/${{ matrix.contract.wasm }}.wasm"
+          ls -la "$WASM_PATH"
           gh release create "${{ matrix.contract.name }}-${{ github.ref_name }}" \
-            "target/wasm32v1-none/release/${{ matrix.contract.wasm }}.wasm" \
+            "$WASM_PATH" \
             --title "${{ matrix.contract.name }} ${{ github.ref_name }}" \
             --notes "Build from commit ${{ github.sha }}" \
-            --repo "${{ github.repository }}" \
-            --clobber
+            --repo "${{ github.repository }}"
 
       - name: Attest provenance
         uses: actions/attest-build-provenance@v4
