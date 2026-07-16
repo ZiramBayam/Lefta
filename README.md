@@ -95,31 +95,48 @@ Executes split transfers atomically. Pulls USDC from sender, calculates per-reci
 
 | Contract | Address | Status |
 |----------|---------|--------|
-| TemplateRegistry | `CAN6AQO3CVWGDFNHCM4ML53RQM2EW65NB7IPLD4KYZ5HPSVFQKL4LHNZ` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
-| SplitRouter | `CDLDOKQ4FAQY4P7AIRVTIRSVKIZVLRKJYDN7ELCV6YWOXSQ4DP2Z65TM` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
+| TemplateRegistry | `CBXNN2VUWBWO6P64KUVS7DZHND3UVERYU7HX7FSO6ZQWTE34EKQ7GXU4` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
+| SplitRouter | `CAMU4AFB55T7W536Y6Z6NFAJQEEUWLQI3LIBYYEMKZITIMEQIJXWVCFV` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
 | USDC (SAC) | `CAFFIKBNRYES5IMSHYOAHFQHUYFNB6DQYH6WICEGYP6X72LHOAY3SABL` | Built-in (no verification needed) |
 
 **Network:** Stellar Testnet  
 **Deployed:** 2026-07-16
+**Build Release:** v0.1.0 ([GitHub Releases](https://github.com/ZiramBayam/Lefta/releases))
 
 ---
 
 ### Contract Verification
 
-Both contracts include [SEP-58](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0058.md) metadata (embedded in the WASM `contractmetav0` custom section), enabling trustless source-code verification.
+This project supports **SEP-55** (GitHub Attestation → Stellar Expert) and **SEP-58** (WASM metadata).
+
+#### SEP-55: GitHub Actions Build Verification
+
+When a tag is pushed, the [release workflow](.github/workflows/release.yml):
+
+1. Builds WASM via `cargo build --release --target wasm32v1-none` (bypasses `stellar contract build` which bans Rust 1.91.0)
+2. Injects SEP-58 metadata (`source_repo`, `source_rev`)
+3. Creates GitHub Release with `.wasm` + attestation
+4. Notifies Stellar Expert for auto-verification
+
+Downloads: [template-registry](https://github.com/ZiramBayam/Lefta/releases/tag/template-registry-v0.1.0) · [split-router](https://github.com/ZiramBayam/Lefta/releases/tag/split-router-v0.1.0)
+
+#### SEP-58: Contract Metadata
+
+Contracts include `contractmetav0` custom section with:
+
+- `source_repo` — `https://github.com/ZiramBayam/Lefta`
+- `source_rev` — Git commit SHA at build time
 
 ```bash
-# Verify via CSV Verify
+# Verify via CSV Verify (server-side, may error)
 curl -X POST https://stellar-contract-verification.vercel.app/api/verify \
   -H "Content-Type: application/json" \
-  -d '{"contract_id": "CAN6AQO3CVWGDFNHCM4ML53RQM2EW65NB7IPLD4KYZ5HPSVFQKL4LHNZ"}'
+  -d '{"contract_id": "CBXNN2VUWBWO6P64KUVS7DZHND3UVERYU7HX7FSO6ZQWTE34EKQ7GXU4"}'
 
 curl -X POST https://stellar-contract-verification.vercel.app/api/verify \
   -H "Content-Type: application/json" \
-  -d '{"contract_id": "CDLDOKQ4FAQY4P7AIRVTIRSVKIZVLRKJYDN7ELCV6YWOXSQ4DP2Z65TM"}'
+  -d '{"contract_id": "CAMU4AFB55T7W536Y6Z6NFAJQEEUWLQI3LIBYYEMKZITIMEQIJXWVCFV"}'
 ```
-
-Or paste the contract IDs at [stellar-contract-verification.vercel.app](https://stellar-contract-verification.vercel.app/verify).
 
 ---
 
