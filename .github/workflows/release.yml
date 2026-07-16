@@ -51,9 +51,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          RELEASE_TAG="${{ matrix.contract.name }}-${{ github.ref_name }}"
           WASM_PATH="${{ github.workspace }}/contracts/target/wasm32v1-none/release/${{ matrix.contract.wasm }}.wasm"
-          ls -la "$WASM_PATH"
-          gh release create "${{ matrix.contract.name }}-${{ github.ref_name }}" \
+          # Hapus release lama jika sudah ada (re-tag)
+          gh release delete "$RELEASE_TAG" --yes 2>/dev/null || true
+          # Hapus tag lokal yang mungkin tersisa
+          git push origin ":refs/tags/$RELEASE_TAG" 2>/dev/null || true
+          gh release create "$RELEASE_TAG" \
             "$WASM_PATH" \
             --title "${{ matrix.contract.name }} ${{ github.ref_name }}" \
             --notes "Build from commit ${{ github.sha }}" \
