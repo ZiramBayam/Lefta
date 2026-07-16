@@ -15,7 +15,7 @@ jobs:
     with:
       release_name: template-registry-${{ github.ref_name }}
       release_description: 'TemplateRegistry contract'
-      relative_path: '["contracts/template-registry"]'
+      relative_path: 'contracts/template-registry'
       package: 'template-registry'
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
@@ -25,7 +25,7 @@ jobs:
     with:
       release_name: split-router-${{ github.ref_name }}
       release_description: 'SplitRouter contract'
-      relative_path: '["contracts/split-router"]'
+      relative_path: 'contracts/split-router'
       package: 'split-router'
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
