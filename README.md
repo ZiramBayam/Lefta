@@ -95,13 +95,13 @@ Executes split transfers atomically. Pulls USDC from sender, calculates per-reci
 
 | Contract | Address | Status |
 |----------|---------|--------|
-| TemplateRegistry | `CBXNN2VUWBWO6P64KUVS7DZHND3UVERYU7HX7FSO6ZQWTE34EKQ7GXU4` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
-| SplitRouter | `CAMU4AFB55T7W536Y6Z6NFAJQEEUWLQI3LIBYYEMKZITIMEQIJXWVCFV` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
+| TemplateRegistry | `CCNXNWMJXEIC5DNGIS2Y64AF4BEQWQMBVJKVVYDBVKADEQM3NJTNMXU7` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
+| SplitRouter | `CA4NJHTI3575DDN5ZCLZHMT6XTC5MXBZBCELGLJTKUPNYWZOFNXP6JUB` | [![Verified](https://img.shields.io/badge/SEP--58%20Metadata-embedded-7B1FA2)](https://stellar-contract-verification.vercel.app/verify) |
 | USDC (SAC) | `CAFFIKBNRYES5IMSHYOAHFQHUYFNB6DQYH6WICEGYP6X72LHOAY3SABL` | Built-in (no verification needed) |
 
 **Network:** Stellar Testnet  
-**Deployed:** 2026-07-16
-**Build Release:** v0.1.0 ([GitHub Releases](https://github.com/ZiramBayam/Lefta/releases))
+**Deployed:** 2026-07-16 (#7, commit 7d6278f)
+**Build Release:** [v0.1.0](https://github.com/ZiramBayam/Lefta/releases/tag/v0.1.0) with SEP-55 attestation
 
 ---
 
@@ -131,11 +131,11 @@ Contracts include `contractmetav0` custom section with:
 # Verify via CSV Verify (server-side, may error)
 curl -X POST https://stellar-contract-verification.vercel.app/api/verify \
   -H "Content-Type: application/json" \
-  -d '{"contract_id": "CBXNN2VUWBWO6P64KUVS7DZHND3UVERYU7HX7FSO6ZQWTE34EKQ7GXU4"}'
+  -d '{"contract_id": "CCNXNWMJXEIC5DNGIS2Y64AF4BEQWQMBVJKVVYDBVKADEQM3NJTNMXU7"}'
 
 curl -X POST https://stellar-contract-verification.vercel.app/api/verify \
   -H "Content-Type: application/json" \
-  -d '{"contract_id": "CAMU4AFB55T7W536Y6Z6NFAJQEEUWLQI3LIBYYEMKZITIMEQIJXWVCFV"}'
+  -d '{"contract_id": "CA4NJHTI3575DDN5ZCLZHMT6XTC5MXBZBCELGLJTKUPNYWZOFNXP6JUB"}'
 ```
 
 ---
