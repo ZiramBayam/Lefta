@@ -1,0 +1,31 @@
+name: Build and Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  id-token: write
+  contents: write
+  attestations: write
+
+jobs:
+  release-template-registry:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: template-registry-${{ github.ref_name }}
+      release_description: 'TemplateRegistry contract'
+      relative_path: '["contracts/template-registry"]'
+      package: 'template-registry'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-split-router:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: split-router-${{ github.ref_name }}
+      release_description: 'SplitRouter contract'
+      relative_path: '["contracts/split-router"]'
+      package: 'split-router'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
